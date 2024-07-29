@@ -836,7 +836,7 @@ mod tests {
         let key = vec![0xA, 0xB, 0xC];
 
         let (mut db, _tmp) = create_db();
-        let expected = Arc::new(vec![1, 2, 3]);
+        let expected = vec![1, 2, 3];
         db.put(&key, Column::Metadata, expected.clone()).unwrap();
 
         assert_eq!(db.get(&key, Column::Metadata).unwrap().unwrap(), expected)
@@ -847,11 +847,9 @@ mod tests {
         let key = vec![0xA, 0xB, 0xC];
 
         let (mut db, _tmp) = create_db();
-        let expected = Arc::new(vec![1, 2, 3]);
+        let expected = vec![1, 2, 3];
         db.put(&key, Column::Metadata, expected.clone()).unwrap();
-        let prev = db
-            .replace(&key, Column::Metadata, Arc::new(vec![2, 4, 6]))
-            .unwrap();
+        let prev = db.replace(&key, Column::Metadata, vec![2, 4, 6]).unwrap();
 
         assert_eq!(prev, Some(expected));
     }
@@ -861,7 +859,7 @@ mod tests {
         let key = vec![0xA, 0xB, 0xC];
 
         let (mut db, _tmp) = create_db();
-        let expected = Arc::new(vec![1, 2, 3]);
+        let expected = vec![1, 2, 3];
         db.put(&key, Column::Metadata, expected.clone()).unwrap();
         assert_eq!(db.get(&key, Column::Metadata).unwrap().unwrap(), expected);
 
@@ -874,7 +872,7 @@ mod tests {
         let key = vec![0xA, 0xB, 0xC];
 
         let (mut db, _tmp) = create_db();
-        let expected = Arc::new(vec![1, 2, 3]);
+        let expected = vec![1, 2, 3];
         db.put(&key, Column::Metadata, expected).unwrap();
         assert!(db.exists(&key, Column::Metadata).unwrap());
     }
@@ -882,7 +880,7 @@ mod tests {
     #[test]
     fn commit_changes_inserts() {
         let key = vec![0xA, 0xB, 0xC];
-        let value = Arc::new(vec![1, 2, 3]);
+        let value = vec![1, 2, 3];
 
         let (db, _tmp) = create_db();
         let ops = vec![(
@@ -900,7 +898,7 @@ mod tests {
     #[test]
     fn commit_changes_removes() {
         let key = vec![0xA, 0xB, 0xC];
-        let value = Arc::new(vec![1, 2, 3]);
+        let value = vec![1, 2, 3];
 
         let (mut db, _tmp) = create_db();
         db.put(&key, Column::Metadata, value).unwrap();
@@ -919,7 +917,7 @@ mod tests {
         let key = vec![0x00];
 
         let (mut db, _tmp) = create_db();
-        let expected = Arc::new(vec![]);
+        let expected = vec![];
         db.put(&key, Column::Metadata, expected.clone()).unwrap();
 
         assert_eq!(db.get(&key, Column::Metadata).unwrap().unwrap(), expected);
@@ -943,7 +941,7 @@ mod tests {
         let key: Vec<u8> = Vec::with_capacity(0);
 
         let (mut db, _tmp) = create_db();
-        let expected = Arc::new(vec![1, 2, 3]);
+        let expected = vec![1, 2, 3];
         db.put(&key, Column::Metadata, expected.clone()).unwrap();
 
         assert_eq!(db.get(&key, Column::Metadata).unwrap().unwrap(), expected);
@@ -967,7 +965,7 @@ mod tests {
         let key: Vec<u8> = Vec::with_capacity(0);
 
         let (mut db, _tmp) = create_db();
-        let expected = Arc::new(vec![]);
+        let expected = vec![];
         db.put(&key, Column::Metadata, expected.clone()).unwrap();
 
         assert_eq!(db.get(&key, Column::Metadata).unwrap().unwrap(), expected);
@@ -1044,7 +1042,7 @@ mod tests {
     #[test]
     fn snapshot_allows_get_entry_after_it_was_removed() {
         let (mut db, _tmp) = create_db();
-        let value = Arc::new(vec![1, 2, 3]);
+        let value = vec![1, 2, 3];
 
         // Given
         let key_1 = [1; 32];
@@ -1065,7 +1063,7 @@ mod tests {
     #[test]
     fn snapshot_allows_correct_iteration_even_after_all_elements_where_removed() {
         let (mut db, _tmp) = create_db();
-        let value = Arc::new(vec![1, 2, 3]);
+        let value = vec![1, 2, 3];
 
         // Given
         let key_1 = [1; 32];

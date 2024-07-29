@@ -194,7 +194,6 @@ mod tests {
         kv_store::KeyValueMutate,
         transactional::ReadTransaction,
     };
-    use std::sync::Arc;
 
     impl<Description> KeyValueMutate for MemoryStore<Description>
     where
@@ -227,7 +226,7 @@ mod tests {
         let key = vec![0x00];
 
         let mut db = MemoryStore::<OnChain>::default();
-        let expected = Arc::new(vec![]);
+        let expected = vec![];
         db.put(&key.to_vec(), Column::Metadata, expected.clone())
             .unwrap();
 
@@ -252,7 +251,7 @@ mod tests {
         let key: Vec<u8> = Vec::with_capacity(0);
 
         let mut db = MemoryStore::<OnChain>::default();
-        let expected = Arc::new(vec![1, 2, 3]);
+        let expected = vec![1, 2, 3];
         db.put(&key, Column::Metadata, expected.clone()).unwrap();
 
         assert_eq!(db.get(&key, Column::Metadata).unwrap().unwrap(), expected);
@@ -276,7 +275,7 @@ mod tests {
         let key: Vec<u8> = Vec::with_capacity(0);
 
         let mut db = MemoryStore::<OnChain>::default();
-        let expected = Arc::new(vec![]);
+        let expected = vec![];
         db.put(&key, Column::Metadata, expected.clone()).unwrap();
 
         assert_eq!(db.get(&key, Column::Metadata).unwrap().unwrap(), expected);
