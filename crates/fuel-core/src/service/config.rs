@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use clap::ValueEnum;
+// use clap::ValueEnum;
 use strum_macros::{
     Display,
     EnumString,
@@ -213,7 +213,7 @@ pub struct VMConfig {
     pub backtrace: bool,
 }
 
-#[derive(Clone, Debug, Display, Eq, PartialEq, EnumString, VariantNames, ValueEnum)]
+#[derive(Clone, Debug, Display, Eq, PartialEq, EnumString, VariantNames)]
 #[strum(serialize_all = "kebab_case")]
 pub enum DbType {
     InMemory,

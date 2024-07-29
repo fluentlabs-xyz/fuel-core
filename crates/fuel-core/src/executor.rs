@@ -4,6 +4,7 @@
 #[cfg(test)]
 mod tests {
     use crate as fuel_core;
+    use fluentbase_core::helpers_fvm::fvm_transact;
     use fuel_core::database::Database;
     use fuel_core_executor::{
         executor::OnceTransactionsSource,
@@ -1370,6 +1371,22 @@ mod tests {
             transactions: vec![tx.into()],
         };
 
+        let consensus_params = ConsensusParameters::default();
+        let coinbase_contract_id = ContractId::default();
+        let checked_tx = tx
+            .into_checked(*block.header.height(), &consensus_params)
+            .expect("convert into checked");
+        let mut memory = MemoryInstance::new();
+
+        let fvm_exec_result = fvm_transact(
+            &mut db.storage_as_mut(),
+            checked_tx,
+            &block.header,
+            coinbase_contract_id,
+            0,
+            &mut memory,
+            consensus_params,
+        );
         let ExecutionResult {
             skipped_transactions,
             ..
