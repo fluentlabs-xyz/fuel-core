@@ -22,19 +22,19 @@ futures = { workspace = true }
 hex = "0.4"
 ip_network = "0.4"
 libp2p = { version = "0.53.2", default-features = false, features = [
-    "dns",
-    "gossipsub",
-    "identify",
-    "kad",
-    "macros",
-    "mdns",
-    "noise",
-    "request-response",
-    "secp256k1",
-    "tcp",
-    "tokio",
-    "yamux",
-    "websocket",
+  "dns",
+  "gossipsub",
+  "identify",
+  "kad",
+  "macros",
+  "mdns",
+  "noise",
+  "request-response",
+  "secp256k1",
+  "tcp",
+  "tokio",
+  "yamux",
+  "websocket",
 ] }
 libp2p-mplex = "0.41.0"
 postcard = { workspace = true, features = ["use-std"] }
