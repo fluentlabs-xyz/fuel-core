@@ -43,7 +43,6 @@ use crate::{
     StorageSize,
     StorageWrite,
 };
-use core::ops::Deref;
 
 #[cfg(feature = "std")]
 use std::borrow::Cow;
@@ -350,7 +349,7 @@ where
         self.inner
             .get(key_bytes.as_ref(), <M as TableWithBlueprint>::column())
             // TODO: Return `Value` instead of cloned `Vec<u8>`.
-            .map(|value| value.map(|value| value.deref().clone()))
+            .map(|value| value.map(|value| value.clone()))
     }
 }
 

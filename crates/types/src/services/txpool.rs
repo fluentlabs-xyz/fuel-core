@@ -1,5 +1,18 @@
 //! Types for interoperability with the txpool service
 
+use core::time::Duration;
+
+use fuel_vm_private::{
+    checked_transaction::{
+        CheckError,
+        CheckedTransaction,
+    },
+    fuel_types::BlockHeight,
+};
+use tai64::Tai64;
+
+use std::sync::Arc;
+
 use crate::{
     blockchain::{
         block::Block,
@@ -37,16 +50,6 @@ use crate::{
     },
     services::executor::TransactionExecutionResult,
 };
-use core::time::Duration;
-use fuel_vm_private::{
-    checked_transaction::{
-        CheckError,
-        CheckedTransaction,
-    },
-    fuel_types::BlockHeight,
-};
-use std::sync::Arc;
-use tai64::Tai64;
 
 /// The alias for transaction pool result.
 pub type Result<T> = core::result::Result<T, Error>;

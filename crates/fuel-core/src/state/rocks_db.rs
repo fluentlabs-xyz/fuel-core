@@ -519,7 +519,7 @@ where
                         key_as_vec.len().saturating_add(value_as_vec.len()) as u64,
                     );
 
-                    (key_as_vec, Arc::new(value_as_vec))
+                    (key_as_vec, value_as_vec)
                 })
                 .map_err(|e| DatabaseError::Other(e.into()).into())
             })
@@ -592,7 +592,7 @@ where
             self.metrics.bytes_read.inc_by(value.len() as u64);
         }
 
-        Ok(value.map(Arc::new))
+        Ok(value)
     }
 
     fn read(
@@ -725,7 +725,7 @@ where
                 match op {
                     WriteOperation::Insert(value) => {
                         self.metrics.bytes_written.inc_by(value.len() as u64);
-                        batch.put_cf(&cf, key, value.as_ref());
+                        batch.put_cf(&cf, key, <Vec<u8> as AsRef<[u8]>>::as_ref(value));
                     }
                     WriteOperation::Remove => {
                         batch.delete_cf(&cf, key);

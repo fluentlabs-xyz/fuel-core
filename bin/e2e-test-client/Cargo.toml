@@ -23,7 +23,7 @@ hex = "0.4"
 humantime-serde = "1.1"
 itertools = { workspace = true }
 libtest-mimic = "0.6.0"
-serde = { workspace = true }
+serde = { workspace = true, default-features = false }
 serde_json = { workspace = true }
 tikv-jemallocator = { workspace = true }
 tokio = { workspace = true }
@@ -32,7 +32,7 @@ toml = { version = "0.5" }
 [dev-dependencies]
 assert_cmd = "2.0"
 e2e_client = { path = ".", features = [
-  "dev-deps",
+    "dev-deps",
 ], package = "fuel-core-e2e-client", default-features = false }
 fuel-core-trace = { path = "../../crates/trace" }
 insta = { workspace = true }

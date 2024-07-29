@@ -1,0 +1,45 @@
+{
+  "Script": {
+    "body": {
+      "script_gas_limit": 0,
+      "receipts_root": "0000000000000000000000000000000000000000000000000000000000000000",
+      "script": [],
+      "script_data": []
+    },
+    "policies": {
+      "bits": "MaxFee",
+      "values": [0, 0, 0, 0]
+    },
+    "inputs": [
+      {
+        "CoinSigned": {
+          "utxo_id": {
+            "tx_id": "c49d65de61cf04588a764b557d25cc6c6b4bc0d7429227e2a21e61c213b3a3e2",
+            "output_index": 0
+          },
+          "owner": "6b63804cfbf9856e68e5b6e7aef238dc8311ec55bec04df774003a2c96e0418e",
+          "amount": 4294967295,
+          "asset_id": "f8f8b6283d7fa5b672b530cbb84fcccb4ff8dc40f8176ef4544ddb1f1952ad07",
+          "tx_pointer": {
+            "block_height": 0,
+            "tx_index": 0
+          },
+          "witness_index": 0,
+          "predicate_gas_used": null,
+          "predicate": null,
+          "predicate_data": null
+        }
+      }
+    ],
+    "outputs": [],
+    "witnesses": [
+      {
+        "data": [
+          107, 12, 109, 224, 158, 148, 182, 42, 75, 190, 8, 164, 246, 172, 172, 27, 4, 17, 216, 48, 204, 57, 116, 184,
+          111, 70, 26, 23, 224, 152, 195, 82, 55, 215, 55, 163, 245, 194, 92, 67, 238, 141, 22, 124, 214, 6, 231, 229,
+          250, 122, 158, 3, 94, 95, 248, 155, 251, 76, 230, 49, 217, 234, 91, 41
+        ]
+      }
+    ]
+  }
+}

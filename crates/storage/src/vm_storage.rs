@@ -104,7 +104,8 @@ impl<D: Default> Default for VmStorage<D> {
             consensus_parameters_version: Default::default(),
             state_transition_version: Default::default(),
             current_block_height: Default::default(),
-            current_timestamp: Tai64::now(),
+            current_timestamp: Tai64::from_unix(0),
+            // current_timestamp: Tai64::now(),
             coinbase: Default::default(),
             database: D::default(),
         }

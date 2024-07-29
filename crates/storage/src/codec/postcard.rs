@@ -30,12 +30,13 @@ where
         ))
     }
 }
+use crate::alloc::string::ToString;
 
 impl<T> Decode<T> for Postcard
 where
     T: serde::de::DeserializeOwned,
 {
     fn decode(bytes: &[u8]) -> anyhow::Result<T> {
-        Ok(postcard::from_bytes(bytes)?)
+        Ok(postcard::from_bytes(bytes).map_err(|e| anyhow::Error::msg(e.to_string()))?)
     }
 }

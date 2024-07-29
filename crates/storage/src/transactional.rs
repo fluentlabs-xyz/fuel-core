@@ -71,6 +71,21 @@ pub struct InMemoryTransaction<S> {
     pub(crate) storage: S,
 }
 
+impl<S> InMemoryTransaction<S> {
+    /// Creates a new instance of the transaction.
+    pub fn new(
+        changes: Changes,
+        policy: ConflictPolicy,
+        storage: S,
+    ) -> InMemoryTransaction<S> {
+        InMemoryTransaction {
+            changes,
+            policy,
+            storage,
+        }
+    }
+}
+
 impl<S> StorageTransaction<S> {
     /// Creates a new instance of the storage transaction.
     pub fn transaction(storage: S, policy: ConflictPolicy, changes: Changes) -> Self {
@@ -461,7 +476,7 @@ where
         self.changes
             .entry(column.id())
             .or_default()
-            .insert(k, WriteOperation::Insert(Value::new(buf.to_vec())));
+            .insert(k, WriteOperation::Insert(buf.to_vec()));
         Ok(buf.len())
     }
 

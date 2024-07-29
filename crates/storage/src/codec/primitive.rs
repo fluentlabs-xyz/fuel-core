@@ -3,9 +3,12 @@
 //! It includes all primitive types and types that are arrays inside
 //! or could be represented by arrays.
 
-use crate::codec::{
-    Decode,
-    Encode,
+use crate::{
+    alloc::string::ToString,
+    codec::{
+        Decode,
+        Encode,
+    },
 };
 use fuel_core_types::{
     blockchain::primitives::DaBlockHeight,
@@ -38,7 +41,10 @@ macro_rules! impl_decode {
         $(
             impl Decode<$ty> for Primitive<{ $size }> {
                 fn decode(bytes: &[u8]) -> anyhow::Result<$ty> {
-                    Ok(<$ty>::from_be_bytes(<[u8; { $size }]>::try_from(bytes)?))
+                    let res = <$ty>::from_be_bytes(<[u8; { $size }]>::try_from(bytes).map_err(|e|
+                          anyhow::Error::msg(e.to_string())
+                    )?);
+                    Ok(res)
                 }
             }
         )*
@@ -65,13 +71,17 @@ impl_decode! {
 
 impl Decode<BlockHeight> for Primitive<4> {
     fn decode(bytes: &[u8]) -> anyhow::Result<BlockHeight> {
-        Ok(BlockHeight::from(<[u8; 4]>::try_from(bytes)?))
+        Ok(BlockHeight::from(
+            <[u8; 4]>::try_from(bytes).map_err(|e| anyhow::Error::msg(e.to_string()))?,
+        ))
     }
 }
 
 impl Decode<DaBlockHeight> for Primitive<8> {
     fn decode(bytes: &[u8]) -> anyhow::Result<DaBlockHeight> {
-        Ok(DaBlockHeight::from(<[u8; 8]>::try_from(bytes)?))
+        Ok(DaBlockHeight::from(
+            <[u8; 8]>::try_from(bytes).map_err(|e| anyhow::Error::msg(e.to_string()))?,
+        ))
     }
 }
 
@@ -93,9 +103,15 @@ impl Encode<UtxoId> for Primitive<{ TxId::LEN + 2 }> {
 
 impl Decode<UtxoId> for Primitive<{ TxId::LEN + 2 }> {
     fn decode(bytes: &[u8]) -> anyhow::Result<UtxoId> {
-        let bytes = <[u8; TxId::LEN + 2]>::try_from(bytes)?;
-        let tx_id: [u8; TxId::LEN] = bytes[0..TxId::LEN].try_into()?;
-        let output_index = u16::from_be_bytes(bytes[TxId::LEN..].try_into()?);
+        let bytes = <[u8; TxId::LEN + 2]>::try_from(bytes)
+            .map_err(|e| anyhow::Error::msg(e.to_string()))?;
+        let tx_id: [u8; TxId::LEN] = bytes[0..TxId::LEN]
+            .try_into()
+            .map_err(|_| anyhow::Error::msg("failed to decode tx id".to_string()))?;
+        let output_index =
+            u16::from_be_bytes(bytes[TxId::LEN..].try_into().map_err(|_| {
+                anyhow::Error::msg("failed to decode output index".to_string())
+            })?);
         Ok(UtxoId::new(TxId::from(tx_id), output_index))
     }
 }

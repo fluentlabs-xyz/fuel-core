@@ -37,7 +37,7 @@ pub trait Encode<T: ?Sized> {
 
     /// Returns the serialized object as an [`Value`].
     fn encode_as_value(t: &T) -> Value {
-        Value::new(Self::encode(t).as_bytes().into_owned())
+        Self::encode(t).as_bytes().into_owned()
     }
 }
 

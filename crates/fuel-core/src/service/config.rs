@@ -4,7 +4,7 @@ use clap::ValueEnum;
 use strum_macros::{
     Display,
     EnumString,
-    EnumVariantNames,
+    VariantNames,
 };
 
 use fuel_core_chain_config::SnapshotReader;
@@ -213,9 +213,7 @@ pub struct VMConfig {
     pub backtrace: bool,
 }
 
-#[derive(
-    Clone, Debug, Display, Eq, PartialEq, EnumString, EnumVariantNames, ValueEnum,
-)]
+#[derive(Clone, Debug, Display, Eq, PartialEq, EnumString, VariantNames, ValueEnum)]
 #[strum(serialize_all = "kebab_case")]
 pub enum DbType {
     InMemory,

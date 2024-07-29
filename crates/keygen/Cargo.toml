@@ -15,4 +15,4 @@ anyhow = { workspace = true }
 clap = { workspace = true, features = ["derive", "env"] }
 fuel-core-types = { workspace = true, features = ["alloc", "serde", "random"] }
 libp2p-identity = { version = "0.2.4", features = ["secp256k1", "peerid"] }
-serde = { workspace = true, features = ["derive"] }
+serde = { workspace = true, default-features = false, features = ["derive"] }

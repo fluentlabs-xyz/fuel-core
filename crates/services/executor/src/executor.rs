@@ -142,7 +142,7 @@ use fuel_core_types::{
         relayer::Event,
     },
 };
-use parking_lot::Mutex as ParkingMutex;
+use spin::Mutex as ParkingMutex;
 use tracing::{
     debug,
     warn,
@@ -256,7 +256,8 @@ where
         }
     }
 
-    #[tracing::instrument(skip_all)]
+    // #[tracing::instrument(skip_all)]
+    #[cfg_attr(feature = "trace", tracing::instrument(skip_all))]
     pub fn produce_without_commit<TxSource>(
         self,
         components: Components<TxSource>,
@@ -293,6 +294,7 @@ where
 
         let finalized_block_id = block.id();
 
+        #[cfg(feature = "trace")]
         debug!(
             "Block {:#x} fees: {} gas: {}",
             finalized_block_id, coinbase, used_gas
@@ -327,6 +329,7 @@ where
 
         let finalized_block_id = block.id();
 
+        #[cfg(feature = "trace")]
         debug!(
             "Block {:#x} fees: {} gas: {}",
             finalized_block_id, coinbase, used_gas
@@ -337,7 +340,7 @@ where
         Ok(UncommittedValidationResult::new(result, changes))
     }
 
-    fn into_executor(
+    pub fn into_executor(
         self,
         consensus_params_version: ConsensusParametersVersion,
     ) -> ExecutorResult<(BlockExecutor<R>, StorageTransaction<D>)> {
@@ -357,8 +360,9 @@ where
     }
 }
 
-type BlockStorageTransaction<T> = StorageTransaction<T>;
-type TxStorageTransaction<'a, T> = StorageTransaction<&'a mut BlockStorageTransaction<T>>;
+pub type BlockStorageTransaction<T> = StorageTransaction<T>;
+pub type TxStorageTransaction<'a, T> =
+    StorageTransaction<&'a mut BlockStorageTransaction<T>>;
 
 #[derive(Clone, Debug)]
 pub struct BlockExecutor<R> {
@@ -385,7 +389,8 @@ impl<R> BlockExecutor<R>
 where
     R: RelayerPort,
 {
-    #[tracing::instrument(skip_all)]
+    #[cfg_attr(feature = "trace", tracing::instrument(skip_all))]
+    // #[tracing::instrument(skip_all)]
     /// Produce the fuel block with specified components
     fn produce_block<TxSource, D>(
         mut self,
@@ -642,7 +647,8 @@ where
         Ok(())
     }
 
-    #[tracing::instrument(skip_all)]
+    #[cfg_attr(feature = "trace", tracing::instrument(skip_all))]
+    // #[tracing::instrument(skip_all)]
     fn validate_block<D>(
         mut self,
         block: &Block,
@@ -1406,7 +1412,7 @@ where
         Ok(())
     }
 
-    fn update_input_used_gas<Tx>(
+    pub fn update_input_used_gas<Tx>(
         predicate_gas_used: Vec<Option<Word>>,
         tx_id: TxId,
         tx: &mut Tx,
@@ -1478,7 +1484,7 @@ where
         Ok(checked_tx)
     }
 
-    fn attempt_tx_execution_with_vm<Tx, T>(
+    pub fn attempt_tx_execution_with_vm<Tx, T>(
         &self,
         checked_tx: Checked<Tx>,
         header: &PartialBlockHeader,
@@ -1872,6 +1878,7 @@ where
                     Because the VM's memory is limited by the `usize` of the system, \
                     it is impossible to lose higher bits during truncation.",
                 );
+                #[cfg(feature = "trace")]
                 warn!(
                     target = "vm",
                     "Backtrace on contract: 0x{:x}\nregisters: {:?}\ncall_stack: {:?}\nstack\n: {}",
