@@ -123,6 +123,7 @@ mod tests {
             Call,
             CallFrame,
             Contract,
+            ProgramState,
         },
         services::{
             block_producer::Components,
@@ -1368,25 +1369,31 @@ mod tests {
 
         let block = PartialFuelBlock {
             header: Default::default(),
-            transactions: vec![tx.into()],
+            transactions: vec![tx.clone().into()],
         };
 
-        let consensus_params = ConsensusParameters::default();
-        let coinbase_contract_id = ContractId::default();
-        let checked_tx = tx
-            .into_checked(*block.header.height(), &consensus_params)
-            .expect("convert into checked");
-        let mut memory = MemoryInstance::new();
+        {
+            // fluent tests
+            let consensus_params = ConsensusParameters::default();
+            let coinbase_contract_id = ContractId::default();
+            let checked_tx = tx
+                .into_checked(*block.header.height(), &consensus_params)
+                .expect("success convert into checked tx");
+            let mut memory = MemoryInstance::new();
+            let mut storage_transaction = db.write_transaction();
+            let fvm_exec_result = fvm_transact(
+                &mut storage_transaction,
+                checked_tx,
+                &block.header,
+                coinbase_contract_id,
+                0,
+                &mut memory,
+                consensus_params,
+            )
+            .expect("success");
+            assert_eq!(ProgramState::Revert(0), fvm_exec_result.1);
+        }
 
-        let fvm_exec_result = fvm_transact(
-            &mut db.storage_as_mut(),
-            checked_tx,
-            &block.header,
-            coinbase_contract_id,
-            0,
-            &mut memory,
-            consensus_params,
-        );
         let ExecutionResult {
             skipped_transactions,
             ..
