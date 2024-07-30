@@ -4,7 +4,10 @@
 #[cfg(test)]
 mod tests {
     use crate as fuel_core;
-    use fluentbase_core::helpers_fvm::fvm_transact;
+    use fluentbase_core::helpers_fvm::{
+        fvm_transact,
+        fvm_transact_commit,
+    };
     use fuel_core::database::Database;
     use fuel_core_executor::{
         executor::OnceTransactionsSource,
@@ -23,6 +26,7 @@ mod tests {
         },
         transactional::{
             AtomicView,
+            Modifiable,
             WriteTransaction,
         },
         Result as StorageResult,
@@ -1378,7 +1382,7 @@ mod tests {
             let coinbase_contract_id = ContractId::default();
             let checked_tx = tx
                 .into_checked(*block.header.height(), &consensus_params)
-                .expect("success convert into checked tx");
+                .expect("into_checked successful");
             let mut memory = MemoryInstance::new();
             let mut storage_transaction = db.write_transaction();
             let fvm_exec_result = fvm_transact(
@@ -1389,14 +1393,22 @@ mod tests {
                 0,
                 &mut memory,
                 consensus_params,
-            )
-            .expect("success");
-            assert_eq!(ProgramState::Revert(0), fvm_exec_result.1);
+                true,
+            );
+            assert_eq!(true, fvm_exec_result.is_err());
+            assert!(matches!(
+                &fvm_exec_result.unwrap_err(),
+                &ExecutorError::TransactionValidity(
+                    TransactionValidityError::CoinMismatch(_)
+                )
+            ));
         }
 
         let ExecutionResult {
+            block: _block,
             skipped_transactions,
-            ..
+            tx_status: _tx_status,
+            events: _events,
         } = executor.produce_and_commit(block).unwrap();
         // `tx` should be skipped.
         assert_eq!(skipped_transactions.len(), 1);
@@ -1440,8 +1452,36 @@ mod tests {
 
         let block = PartialFuelBlock {
             header: Default::default(),
-            transactions: vec![tx.into()],
+            transactions: vec![tx.clone().into()],
         };
+
+        {
+            // fluent tests
+            let consensus_params = ConsensusParameters::default();
+            let coinbase_contract_id = ContractId::default();
+            let checked_tx = tx
+                .into_checked(*block.header.height(), &consensus_params)
+                .expect("into_checked successful");
+            let mut memory = MemoryInstance::new();
+            let mut storage_transaction = db.write_transaction();
+            let fvm_exec_result = fvm_transact(
+                &mut storage_transaction,
+                checked_tx,
+                &block.header,
+                coinbase_contract_id,
+                0,
+                &mut memory,
+                consensus_params,
+                true,
+            );
+            assert_eq!(true, fvm_exec_result.is_err());
+            assert!(matches!(
+                &fvm_exec_result.unwrap_err(),
+                &ExecutorError::TransactionValidity(
+                    TransactionValidityError::ContractDoesNotExist(_)
+                )
+            ));
+        }
 
         let ExecutionResult {
             skipped_transactions,
@@ -1580,8 +1620,52 @@ mod tests {
                 },
                 ..Default::default()
             },
-            transactions: vec![create.into(), non_modify_state_tx],
+            transactions: vec![create.clone().into(), non_modify_state_tx.clone()],
         };
+
+        {
+            // fluent tests
+            let consensus_params = ConsensusParameters::default();
+            let coinbase_contract_id = ContractId::default();
+            let create_tx = create.as_create().unwrap().clone();
+            let create_tx_checked = create_tx
+                .into_checked(*block.header.height(), &consensus_params)
+                .expect("into_checked successful");
+            let mut storage_transaction = db.write_transaction();
+            let fvm_exec_result = fvm_transact_commit(
+                &mut storage_transaction,
+                create_tx_checked,
+                &block.header,
+                coinbase_contract_id,
+                0,
+                consensus_params.clone(),
+                false,
+            );
+            assert_eq!(true, fvm_exec_result.is_ok());
+
+            let script_non_modify_state_tx =
+                non_modify_state_tx.as_script().unwrap().clone();
+            let script_non_modify_state_tx_checked = script_non_modify_state_tx
+                .into_checked(*block.header.height(), &consensus_params)
+                .expect("into_checked successful");
+            let fvm_exec_result = fvm_transact_commit(
+                &mut storage_transaction,
+                script_non_modify_state_tx_checked,
+                &block.header,
+                coinbase_contract_id,
+                0,
+                consensus_params,
+                false,
+            );
+            assert_eq!(true, fvm_exec_result.is_ok());
+            let fvm_exec_result = fvm_exec_result.unwrap();
+            let empty_state = (*sparse::empty_sum()).into();
+            let executed_tx = fvm_exec_result.2;
+            assert_eq!(executed_tx.inputs()[0].state_root(), Some(&empty_state));
+            assert_eq!(executed_tx.inputs()[0].balance_root(), Some(&empty_state));
+            assert_eq!(executed_tx.outputs()[0].state_root(), Some(&empty_state));
+            assert_eq!(executed_tx.outputs()[0].balance_root(), Some(&empty_state));
+        }
 
         let ExecutionResult {
             block, tx_status, ..
@@ -1635,8 +1719,60 @@ mod tests {
                 },
                 ..Default::default()
             },
-            transactions: vec![create.into(), non_modify_state_tx],
+            transactions: vec![create.clone().into(), non_modify_state_tx.clone()],
         };
+
+        {
+            // fluent tests
+            let consensus_params = ConsensusParameters::default();
+            let coinbase_contract_id = ContractId::default();
+            let create_tx = create.as_create().unwrap().clone();
+            let create_tx_checked = create_tx
+                .into_checked(*block.header.height(), &consensus_params)
+                .expect("into_checked successful");
+            let mut storage_transaction = db.write_transaction();
+            let fvm_exec_result = fvm_transact_commit(
+                &mut storage_transaction,
+                create_tx_checked,
+                &block.header,
+                coinbase_contract_id,
+                0,
+                consensus_params.clone(),
+                false,
+            );
+            assert_eq!(true, fvm_exec_result.is_ok());
+            // let fvm_exec_result = fvm_exec_result.unwrap();
+
+            let script_non_modify_state_tx =
+                non_modify_state_tx.as_script().unwrap().clone();
+            let script_non_modify_state_tx_checked = script_non_modify_state_tx
+                .into_checked(*block.header.height(), &consensus_params)
+                .expect("into_checked successful");
+            let fvm_exec_result = fvm_transact_commit(
+                &mut storage_transaction,
+                script_non_modify_state_tx_checked,
+                &block.header,
+                coinbase_contract_id,
+                0,
+                consensus_params,
+                false,
+            );
+            assert_eq!(true, fvm_exec_result.is_ok());
+            let fvm_exec_result = fvm_exec_result.unwrap();
+            let empty_state = (*sparse::empty_sum()).into();
+            let executed_tx = fvm_exec_result.2;
+            assert!(matches!(fvm_exec_result.1, ProgramState::Revert { .. }));
+            assert_eq!(
+                executed_tx.inputs()[0].state_root(),
+                executed_tx.outputs()[0].state_root()
+            );
+            assert_eq!(
+                executed_tx.inputs()[0].balance_root(),
+                executed_tx.outputs()[0].balance_root()
+            );
+            assert_eq!(executed_tx.inputs()[0].state_root(), Some(&empty_state));
+            assert_eq!(executed_tx.inputs()[0].balance_root(), Some(&empty_state));
+        }
 
         let ExecutionResult {
             block, tx_status, ..
@@ -1718,7 +1854,7 @@ mod tests {
             .build()
             .transaction()
             .clone();
-        let db = Database::default();
+        let mut db = Database::default();
 
         let mut executor = create_executor(
             db.clone(),
@@ -1736,8 +1872,64 @@ mod tests {
                 },
                 ..Default::default()
             },
-            transactions: vec![create.into(), modify_balance_and_state_tx.into()],
+            transactions: vec![
+                create.clone().into(),
+                modify_balance_and_state_tx.clone().into(),
+            ],
         };
+
+        {
+            // fluent tests
+            let consensus_params = ConsensusParameters::default();
+            let coinbase_contract_id = ContractId::default();
+            let create_tx = create.as_create().unwrap().clone();
+            let create_tx_checked = create_tx
+                .into_checked(*block.header.height(), &consensus_params)
+                .expect("into_checked successful");
+            let mut storage_transaction = db.write_transaction();
+            let fvm_exec_result = fvm_transact_commit(
+                &mut storage_transaction,
+                create_tx_checked,
+                &block.header,
+                coinbase_contract_id,
+                0,
+                consensus_params.clone(),
+                false,
+            );
+            assert_eq!(true, fvm_exec_result.is_ok());
+
+            let script_modify_balance_and_state_tx =
+                modify_balance_and_state_tx.as_script().unwrap().clone();
+            let script_modify_balance_and_state_tx_checked =
+                script_modify_balance_and_state_tx
+                    .into_checked(*block.header.height(), &consensus_params)
+                    .expect("into_checked successful");
+            let fvm_exec_result = fvm_transact_commit(
+                &mut storage_transaction,
+                script_modify_balance_and_state_tx_checked,
+                &block.header,
+                coinbase_contract_id,
+                0,
+                consensus_params,
+                false,
+            );
+            assert_eq!(true, fvm_exec_result.is_ok());
+            let fvm_exec_result = fvm_exec_result.unwrap();
+
+            let empty_state = (*sparse::empty_sum()).into();
+            let executed_tx = fvm_exec_result.2;
+            assert_eq!(executed_tx.inputs()[0].state_root(), Some(&empty_state));
+            assert_eq!(executed_tx.inputs()[0].balance_root(), Some(&empty_state));
+            // Roots should be different
+            assert_ne!(
+                executed_tx.inputs()[0].state_root(),
+                executed_tx.outputs()[0].state_root()
+            );
+            assert_ne!(
+                executed_tx.inputs()[0].balance_root(),
+                executed_tx.outputs()[0].balance_root()
+            );
+        }
 
         let ExecutionResult {
             block, tx_status, ..
@@ -1822,7 +2014,7 @@ mod tests {
             .build()
             .transaction()
             .clone();
-        let db = Database::default();
+        let mut db = Database::default();
 
         let consensus_parameters = ConsensusParameters::default();
         let mut executor = create_executor(
@@ -1842,8 +2034,47 @@ mod tests {
                 },
                 ..Default::default()
             },
-            transactions: vec![create.into(), modify_balance_and_state_tx.into()],
+            transactions: vec![
+                create.clone().into(),
+                modify_balance_and_state_tx.clone().into(),
+            ],
         };
+
+        {
+            // fluent tests
+            let consensus_params = ConsensusParameters::default();
+            let coinbase_contract_id = ContractId::default();
+            let tx1 = create.as_create().unwrap().clone();
+            let create_tx_checked = tx1
+                .into_checked(*block.header.height(), &consensus_params)
+                .expect("into_checked successful");
+            let mut storage_transaction = db.write_transaction();
+            let exec_result1 = fvm_transact_commit(
+                &mut storage_transaction,
+                create_tx_checked,
+                &block.header,
+                coinbase_contract_id,
+                0,
+                consensus_params.clone(),
+                false,
+            );
+            assert_eq!(true, exec_result1.is_ok());
+
+            let tx2 = modify_balance_and_state_tx.as_script().unwrap().clone();
+            let tx2_checked = tx2
+                .into_checked(*block.header.height(), &consensus_params)
+                .expect("into_checked successful");
+            let exec_result2 = fvm_transact_commit(
+                &mut storage_transaction,
+                tx2_checked,
+                &block.header,
+                coinbase_contract_id,
+                0,
+                consensus_params.clone(),
+                false,
+            );
+            assert_eq!(true, exec_result2.is_ok());
+        }
 
         let ExecutionResult { block, .. } = executor.produce_and_commit(block).unwrap();
 
@@ -1863,8 +2094,34 @@ mod tests {
                 },
                 ..Default::default()
             },
-            transactions: vec![new_tx.into()],
+            transactions: vec![new_tx.clone().into()],
         };
+
+        {
+            // fluent tests
+            let consensus_params = ConsensusParameters::default();
+            let coinbase_contract_id = ContractId::default();
+            let tx1 = new_tx.as_script().unwrap().clone();
+            let create_tx_checked = tx1
+                .into_checked_basic(*block.header.height(), &consensus_params)
+                .expect("into_checked successful");
+            let mut storage_transaction = db.write_transaction();
+            let exec_result1 = fvm_transact_commit(
+                &mut storage_transaction,
+                create_tx_checked,
+                &block.header,
+                coinbase_contract_id,
+                0,
+                consensus_params.clone(),
+                false,
+            );
+            assert_eq!(true, exec_result1.is_ok());
+            let exec_result1 = exec_result1.unwrap();
+
+            let tx = exec_result1.2;
+            assert_eq!(tx.inputs()[0].balance_root(), balance_root);
+            assert_eq!(tx.inputs()[0].state_root(), state_root);
+        }
 
         let ExecutionResult {
             block, tx_status, ..
@@ -1930,8 +2187,51 @@ mod tests {
                 },
                 ..Default::default()
             },
-            transactions: vec![create.into(), foreign_transfer.into()],
+            transactions: vec![create.clone().into(), foreign_transfer.clone().into()],
         };
+
+        {
+            // fluent tests
+            let consensus_params = ConsensusParameters::default();
+            let coinbase_contract_id = ContractId::default();
+            let tx1 = create.as_create().unwrap().clone();
+            let create_tx_checked = tx1
+                .into_checked(*block.header.height(), &consensus_params)
+                .expect("into_checked successful");
+            let mut storage_transaction = db.write_transaction();
+            let exec_result1 = fvm_transact_commit(
+                &mut storage_transaction,
+                create_tx_checked,
+                &block.header,
+                coinbase_contract_id,
+                0,
+                consensus_params.clone(),
+                false,
+            );
+            assert_eq!(true, exec_result1.is_ok());
+
+            let tx2 = foreign_transfer.as_script().unwrap().clone();
+            let tx2_checked = tx2
+                .into_checked_basic(*block.header.height(), &consensus_params)
+                .expect("into_checked successful");
+            let exec_result2 = fvm_transact_commit(
+                &mut storage_transaction,
+                tx2_checked,
+                &block.header,
+                coinbase_contract_id,
+                0,
+                consensus_params.clone(),
+                false,
+            );
+            assert_eq!(true, exec_result2.is_ok());
+            let exec_result2 = exec_result2.unwrap();
+
+            db.commit_changes(exec_result2.4).unwrap();
+            let contract_ref = ContractRef::new(db.clone(), contract_id);
+            // Assert the balance root should not be affected.
+            let empty_state = (*sparse::empty_sum()).into();
+            assert_eq!(contract_ref.balance_root().unwrap(), empty_state);
+        }
 
         let _ = executor.produce_and_commit(block).unwrap();
 
@@ -2004,6 +2304,34 @@ mod tests {
             },
             transactions: vec![tx.into()],
         };
+
+        // {
+        //     // fluent tests
+        //     let extra_tx_checks = true;
+        //     let consensus_params = ConsensusParameters::default();
+        //     let coinbase_contract_id = ContractId::default();
+        //     let tx1 = tx.as_script().unwrap().clone();
+        //     let create_tx_checked = tx1
+        //         .into_checked(*block.header.height(), &consensus_params)
+        //         .expect("into_checked successful");
+        //     let mut storage_transaction = db.write_transaction();
+        //     let exec_result1 = fvm_transact_commit(
+        //         &mut storage_transaction,
+        //         create_tx_checked,
+        //         &block.header,
+        //         coinbase_contract_id,
+        //         0,
+        //         consensus_params.clone(),
+        //         extra_tx_checks,
+        //     );
+        //     assert_eq!(true, exec_result1.is_ok());
+        //     let exec_result1 = exec_result1.unwrap();
+        //     // db.commit_changes(exec_result1.4).unwrap();
+        //
+        //     let utxo_id = exec_result1.2.inputs()[0].utxo_id().unwrap();
+        //     let _coin = db.storage::<Coins>().get(utxo_id).unwrap();
+        //     // assert!(coin.is_none());
+        // }
 
         let ExecutionResult { block, events, .. } =
             executor.produce_and_commit(block).unwrap();

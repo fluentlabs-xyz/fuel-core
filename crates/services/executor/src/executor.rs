@@ -1451,7 +1451,7 @@ where
         Ok(())
     }
 
-    fn extra_tx_checks<Tx, T>(
+    pub fn extra_tx_checks<Tx, T>(
         &self,
         mut checked_tx: Checked<Tx>,
         header: &PartialBlockHeader,
