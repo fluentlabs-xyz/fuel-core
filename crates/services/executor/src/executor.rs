@@ -1365,7 +1365,7 @@ where
     }
 
     #[allow(clippy::too_many_arguments)]
-    fn update_execution_data<Tx: Chargeable>(
+    pub fn update_execution_data<Tx: Chargeable>(
         &self,
         tx: &Tx,
         execution_data: &mut ExecutionData,
@@ -1627,7 +1627,7 @@ where
     }
 
     /// Mark input utxos as spent
-    fn spend_input_utxos<T>(
+    pub fn spend_input_utxos<T>(
         &self,
         inputs: &[Input],
         db: &mut TxStorageTransaction<T>,
@@ -1891,7 +1891,7 @@ where
         }
     }
 
-    fn persist_output_utxos<T>(
+    pub fn persist_output_utxos<T>(
         &self,
         block_height: BlockHeight,
         execution_data: &mut ExecutionData,

@@ -4,13 +4,20 @@
 #[cfg(test)]
 mod tests {
     use crate as fuel_core;
+    use crate::database::{
+        database_description::on_chain::OnChain,
+        RegularStage,
+    };
     use fluentbase_core::helpers_fvm::{
         fvm_transact,
         fvm_transact_commit,
     };
     use fuel_core::database::Database;
     use fuel_core_executor::{
-        executor::OnceTransactionsSource,
+        executor::{
+            ExecutionData,
+            OnceTransactionsSource,
+        },
         ports::{
             MaybeCheckedTransaction,
             RelayerPort,
@@ -1384,6 +1391,7 @@ mod tests {
                 .into_checked(*block.header.height(), &consensus_params)
                 .expect("into_checked successful");
             let mut memory = MemoryInstance::new();
+            let execution_data = &mut ExecutionData::new();
             let mut storage_transaction = db.write_transaction();
             let fvm_exec_result = fvm_transact(
                 &mut storage_transaction,
@@ -1394,6 +1402,7 @@ mod tests {
                 &mut memory,
                 consensus_params,
                 true,
+                execution_data,
             );
             assert_eq!(true, fvm_exec_result.is_err());
             assert!(matches!(
@@ -1463,6 +1472,7 @@ mod tests {
                 .into_checked(*block.header.height(), &consensus_params)
                 .expect("into_checked successful");
             let mut memory = MemoryInstance::new();
+            let execution_data = &mut ExecutionData::new();
             let mut storage_transaction = db.write_transaction();
             let fvm_exec_result = fvm_transact(
                 &mut storage_transaction,
@@ -1473,6 +1483,7 @@ mod tests {
                 &mut memory,
                 consensus_params,
                 true,
+                execution_data,
             );
             assert_eq!(true, fvm_exec_result.is_err());
             assert!(matches!(
@@ -1632,6 +1643,7 @@ mod tests {
                 .into_checked(*block.header.height(), &consensus_params)
                 .expect("into_checked successful");
             let mut storage_transaction = db.write_transaction();
+            let execution_data = &mut ExecutionData::new();
             let fvm_exec_result = fvm_transact_commit(
                 &mut storage_transaction,
                 create_tx_checked,
@@ -1640,6 +1652,7 @@ mod tests {
                 0,
                 consensus_params.clone(),
                 false,
+                execution_data,
             );
             assert_eq!(true, fvm_exec_result.is_ok());
 
@@ -1656,6 +1669,7 @@ mod tests {
                 0,
                 consensus_params,
                 false,
+                execution_data,
             );
             assert_eq!(true, fvm_exec_result.is_ok());
             let fvm_exec_result = fvm_exec_result.unwrap();
@@ -1731,6 +1745,7 @@ mod tests {
                 .into_checked(*block.header.height(), &consensus_params)
                 .expect("into_checked successful");
             let mut storage_transaction = db.write_transaction();
+            let execution_data = &mut ExecutionData::new();
             let fvm_exec_result = fvm_transact_commit(
                 &mut storage_transaction,
                 create_tx_checked,
@@ -1739,6 +1754,7 @@ mod tests {
                 0,
                 consensus_params.clone(),
                 false,
+                execution_data,
             );
             assert_eq!(true, fvm_exec_result.is_ok());
             // let fvm_exec_result = fvm_exec_result.unwrap();
@@ -1756,6 +1772,7 @@ mod tests {
                 0,
                 consensus_params,
                 false,
+                execution_data,
             );
             assert_eq!(true, fvm_exec_result.is_ok());
             let fvm_exec_result = fvm_exec_result.unwrap();
@@ -1887,6 +1904,7 @@ mod tests {
                 .into_checked(*block.header.height(), &consensus_params)
                 .expect("into_checked successful");
             let mut storage_transaction = db.write_transaction();
+            let execution_data = &mut ExecutionData::new();
             let fvm_exec_result = fvm_transact_commit(
                 &mut storage_transaction,
                 create_tx_checked,
@@ -1895,6 +1913,7 @@ mod tests {
                 0,
                 consensus_params.clone(),
                 false,
+                execution_data,
             );
             assert_eq!(true, fvm_exec_result.is_ok());
 
@@ -1912,6 +1931,7 @@ mod tests {
                 0,
                 consensus_params,
                 false,
+                execution_data,
             );
             assert_eq!(true, fvm_exec_result.is_ok());
             let fvm_exec_result = fvm_exec_result.unwrap();
@@ -2049,6 +2069,7 @@ mod tests {
                 .into_checked(*block.header.height(), &consensus_params)
                 .expect("into_checked successful");
             let mut storage_transaction = db.write_transaction();
+            let execution_data = &mut ExecutionData::new();
             let exec_result1 = fvm_transact_commit(
                 &mut storage_transaction,
                 create_tx_checked,
@@ -2057,6 +2078,7 @@ mod tests {
                 0,
                 consensus_params.clone(),
                 false,
+                execution_data,
             );
             assert_eq!(true, exec_result1.is_ok());
 
@@ -2072,6 +2094,7 @@ mod tests {
                 0,
                 consensus_params.clone(),
                 false,
+                execution_data,
             );
             assert_eq!(true, exec_result2.is_ok());
         }
@@ -2106,6 +2129,7 @@ mod tests {
                 .into_checked_basic(*block.header.height(), &consensus_params)
                 .expect("into_checked successful");
             let mut storage_transaction = db.write_transaction();
+            let execution_data = &mut ExecutionData::new();
             let exec_result1 = fvm_transact_commit(
                 &mut storage_transaction,
                 create_tx_checked,
@@ -2114,6 +2138,7 @@ mod tests {
                 0,
                 consensus_params.clone(),
                 false,
+                execution_data,
             );
             assert_eq!(true, exec_result1.is_ok());
             let exec_result1 = exec_result1.unwrap();
@@ -2199,6 +2224,7 @@ mod tests {
                 .into_checked(*block.header.height(), &consensus_params)
                 .expect("into_checked successful");
             let mut storage_transaction = db.write_transaction();
+            let execution_data = &mut ExecutionData::new();
             let exec_result1 = fvm_transact_commit(
                 &mut storage_transaction,
                 create_tx_checked,
@@ -2207,6 +2233,7 @@ mod tests {
                 0,
                 consensus_params.clone(),
                 false,
+                execution_data,
             );
             assert_eq!(true, exec_result1.is_ok());
 
@@ -2222,6 +2249,7 @@ mod tests {
                 0,
                 consensus_params.clone(),
                 false,
+                execution_data,
             );
             assert_eq!(true, exec_result2.is_ok());
             let exec_result2 = exec_result2.unwrap();
@@ -2304,34 +2332,6 @@ mod tests {
             },
             transactions: vec![tx.into()],
         };
-
-        // {
-        //     // fluent tests
-        //     let extra_tx_checks = true;
-        //     let consensus_params = ConsensusParameters::default();
-        //     let coinbase_contract_id = ContractId::default();
-        //     let tx1 = tx.as_script().unwrap().clone();
-        //     let create_tx_checked = tx1
-        //         .into_checked(*block.header.height(), &consensus_params)
-        //         .expect("into_checked successful");
-        //     let mut storage_transaction = db.write_transaction();
-        //     let exec_result1 = fvm_transact_commit(
-        //         &mut storage_transaction,
-        //         create_tx_checked,
-        //         &block.header,
-        //         coinbase_contract_id,
-        //         0,
-        //         consensus_params.clone(),
-        //         extra_tx_checks,
-        //     );
-        //     assert_eq!(true, exec_result1.is_ok());
-        //     let exec_result1 = exec_result1.unwrap();
-        //     // db.commit_changes(exec_result1.4).unwrap();
-        //
-        //     let utxo_id = exec_result1.2.inputs()[0].utxo_id().unwrap();
-        //     let _coin = db.storage::<Coins>().get(utxo_id).unwrap();
-        //     // assert!(coin.is_none());
-        // }
 
         let ExecutionResult { block, events, .. } =
             executor.produce_and_commit(block).unwrap();
@@ -2525,6 +2525,74 @@ mod tests {
     }
 
     #[test]
+    fn outputs_with_amount_are_included_utxo_set_fluent() {
+        let (deploy, script) = setup_executable_script();
+        let script_id = script.id(&ChainId::default());
+
+        let db: &mut Database<OnChain, RegularStage<OnChain>> = &mut Database::default();
+
+        let block = PartialFuelBlock {
+            header: Default::default(),
+            transactions: vec![deploy.clone().into(), script.clone().into()],
+        };
+
+        // fluent tests
+        let consensus_params = ConsensusParameters::default();
+        let coinbase_contract_id = ContractId::default();
+        let tx1 = deploy.as_create().unwrap().clone();
+        let create_tx_checked = tx1
+            .into_checked(*block.header.height(), &consensus_params)
+            .expect("into_checked successful");
+        let mut storage_transaction = db.write_transaction();
+        let execution_data = &mut ExecutionData::new();
+        let exec_result1 = fvm_transact_commit(
+            &mut storage_transaction,
+            create_tx_checked,
+            &block.header,
+            coinbase_contract_id,
+            0,
+            consensus_params.clone(),
+            false,
+            execution_data,
+        );
+        assert_eq!(true, exec_result1.is_ok());
+        let exec_result1 = exec_result1.unwrap();
+        db.commit_changes(exec_result1.4).unwrap();
+
+        let tx2 = script.as_script().unwrap().clone();
+        let tx2_checked = tx2
+            .into_checked_basic(*block.header.height(), &consensus_params)
+            .expect("into_checked successful");
+        let mut storage_transaction = db.write_transaction();
+        let exec_result2 = fvm_transact_commit(
+            &mut storage_transaction,
+            tx2_checked,
+            &block.header,
+            coinbase_contract_id,
+            0,
+            consensus_params.clone(),
+            false,
+            execution_data,
+        );
+        assert_eq!(true, exec_result2.is_ok());
+        let exec_result2 = exec_result2.unwrap();
+        db.commit_changes(exec_result2.4).unwrap();
+
+        for (idx, output) in exec_result2.2.outputs().iter().enumerate() {
+            let id = UtxoId::new(script_id, idx as u16);
+            match output {
+                Output::Change { .. } | Output::Variable { .. } | Output::Coin { .. } => {
+                    let maybe_utxo = db.storage::<Coins>().get(&id).unwrap();
+                    assert!(maybe_utxo.is_some());
+                    let utxo = maybe_utxo.unwrap();
+                    assert!(*utxo.amount() > 0)
+                }
+                _ => (),
+            }
+        }
+    }
+
+    #[test]
     fn outputs_with_no_value_are_excluded_from_utxo_set() {
         let mut rng = StdRng::seed_from_u64(2322);
         let asset_id: AssetId = rng.gen();
@@ -2555,6 +2623,60 @@ mod tests {
         for idx in 0..2 {
             let id = UtxoId::new(tx_id, idx);
             let maybe_utxo = database.storage::<Coins>().get(&id).unwrap();
+            assert!(maybe_utxo.is_none());
+        }
+    }
+
+    #[test]
+    fn outputs_with_no_value_are_excluded_from_utxo_set_fluent() {
+        let mut rng = StdRng::seed_from_u64(2322);
+        let asset_id: AssetId = rng.gen();
+        let input_amount = 0;
+        let coin_output_amount = 0;
+
+        let tx: Transaction = TxBuilder::new(2322)
+            .coin_input(asset_id, input_amount)
+            .variable_output(Default::default())
+            .coin_output(asset_id, coin_output_amount)
+            .change_output(asset_id)
+            .build()
+            .transaction()
+            .clone()
+            .into();
+        let tx_id = tx.id(&ChainId::default());
+
+        let block = PartialFuelBlock {
+            header: Default::default(),
+            transactions: vec![tx.clone()],
+        };
+
+        let db: &mut Database<OnChain, RegularStage<OnChain>> = &mut Database::default();
+        // fluent tests
+        let consensus_params = ConsensusParameters::default();
+        let coinbase_contract_id = ContractId::default();
+        let tx1 = tx.as_script().unwrap().clone();
+        let create_tx_checked = tx1
+            .into_checked(*block.header.height(), &consensus_params)
+            .expect("into_checked successful");
+        let mut storage_transaction = db.write_transaction();
+        let execution_data = &mut ExecutionData::new();
+        let exec_result1 = fvm_transact_commit(
+            &mut storage_transaction,
+            create_tx_checked,
+            &block.header,
+            coinbase_contract_id,
+            0,
+            consensus_params.clone(),
+            false,
+            execution_data,
+        );
+        assert_eq!(true, exec_result1.is_ok());
+        let exec_result1 = exec_result1.unwrap();
+        db.commit_changes(exec_result1.4).unwrap();
+
+        for idx in 0..2 {
+            let id = UtxoId::new(tx_id, idx);
+            let maybe_utxo = db.storage::<Coins>().get(&id).unwrap();
             assert!(maybe_utxo.is_none());
         }
     }
@@ -2722,6 +2844,73 @@ mod tests {
     }
 
     #[test]
+    fn reverted_execution_consume_only_message_coins_fluent() {
+        let mut rng = StdRng::seed_from_u64(2322);
+        let to: Address = rng.gen();
+        let amount = 500;
+
+        // Script that return `1` - failed script -> execution result will be reverted.
+        let script = vec![op::ret(1)].into_iter().collect();
+        let tx = TransactionBuilder::script(script, vec![])
+            // Add `Input::MessageCoin`
+            .add_unsigned_message_input(SecretKey::random(&mut rng), rng.gen(), rng.gen(), amount, vec![])
+            // Add `Input::MessageData`
+            .add_unsigned_message_input(SecretKey::random(&mut rng), rng.gen(), rng.gen(), amount, vec![0xff; 10])
+            .add_output(Output::change(to, amount + amount, AssetId::BASE))
+            .finalize();
+        let tx_id = tx.id(&ChainId::default());
+
+        let message_coin = message_from_input(&tx.inputs()[0], 0);
+        let message_data = message_from_input(&tx.inputs()[1], 0);
+        let messages = vec![&message_coin, &message_data];
+
+        let block = PartialFuelBlock {
+            header: Default::default(),
+            transactions: vec![tx.clone().into()],
+        };
+
+        // let mut exec = make_executor(&messages);
+
+        let db: &mut Database<OnChain, RegularStage<OnChain>> = &mut Database::default();
+        for message in messages {
+            db.storage::<Messages>()
+                .insert(message.id(), message)
+                .unwrap();
+        }
+
+        let view = db.latest_view().unwrap();
+        assert!(view.message_exists(message_coin.nonce()).unwrap());
+        assert!(view.message_exists(message_data.nonce()).unwrap());
+        let consensus_params = ConsensusParameters::default();
+        let coinbase_contract_id = ContractId::default();
+        let tx1 = tx.as_script().unwrap().clone();
+        let create_tx_checked = tx1
+            .into_checked(*block.header.height(), &consensus_params)
+            .expect("into_checked successful");
+        let mut storage_transaction = db.write_transaction();
+        let execution_data = &mut ExecutionData::new();
+        let exec_result1 = fvm_transact_commit(
+            &mut storage_transaction,
+            create_tx_checked,
+            &block.header,
+            coinbase_contract_id,
+            0,
+            consensus_params.clone(),
+            false,
+            execution_data,
+        );
+        assert_eq!(true, exec_result1.is_ok());
+        let exec_result1 = exec_result1.unwrap();
+        db.commit_changes(exec_result1.4).unwrap();
+
+        // We should spend only `message_coin`. The `message_data` should be unspent.
+        let view = db.latest_view().unwrap();
+        assert!(!view.message_exists(message_coin.nonce()).unwrap());
+        assert!(view.message_exists(message_data.nonce()).unwrap());
+        assert_eq!(*view.coin(&UtxoId::new(tx_id, 0)).unwrap().amount(), amount);
+    }
+
+    #[test]
     fn message_fails_when_spending_nonexistent_message_id() {
         let mut rng = StdRng::seed_from_u64(2322);
 
@@ -2825,6 +3014,53 @@ mod tests {
         let err = &skipped_transactions[0].1;
         assert!(matches!(
             err,
+            &ExecutorError::TransactionValidity(
+                TransactionValidityError::MessageMismatch(_)
+            )
+        ));
+    }
+
+    #[test]
+    fn message_input_fails_when_mismatches_database_fluent() {
+        let mut rng = StdRng::seed_from_u64(2322);
+
+        let (tx, mut message) = make_tx_and_message(&mut rng, 0);
+
+        // Modifying the message to make it mismatch
+        message.set_amount(123);
+
+        let block = PartialFuelBlock {
+            header: Default::default(),
+            transactions: vec![tx.clone()],
+        };
+
+        let db: &mut Database<OnChain, RegularStage<OnChain>> = &mut Database::default();
+        db.storage::<Messages>()
+            .insert(message.id(), &message)
+            .unwrap();
+        let consensus_params = ConsensusParameters::default();
+        let coinbase_contract_id = ContractId::default();
+        let tx1 = tx.as_script().unwrap().clone();
+        let create_tx_checked = tx1
+            .into_checked(*block.header.height(), &consensus_params)
+            .expect("into_checked successful");
+        let mut storage_transaction = db.write_transaction();
+        let execution_data = &mut ExecutionData::new();
+        let exec_result1 = fvm_transact_commit(
+            &mut storage_transaction,
+            create_tx_checked,
+            &block.header,
+            coinbase_contract_id,
+            0,
+            consensus_params.clone(),
+            true,
+            execution_data,
+        );
+        assert_eq!(true, exec_result1.is_err());
+        let exec_result1 = exec_result1.err().unwrap();
+
+        assert!(matches!(
+            &exec_result1,
             &ExecutorError::TransactionValidity(
                 TransactionValidityError::MessageMismatch(_)
             )
