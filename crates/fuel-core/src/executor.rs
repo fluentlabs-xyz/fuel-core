@@ -1350,6 +1350,117 @@ mod tests {
     }
 
     #[test]
+    fn skipped_tx_not_changed_spent_status_fluent() {
+        // `tx2` has two inputs: one used by `tx1` and on random. So after the execution of `tx1`,
+        // the `tx2` become invalid and should be skipped by the block producers. Skipped
+        // transactions should not affect the state so the second input should be `Unspent`.
+        // # Dev-note: `TxBuilder::new(2322u64)` is used to create transactions, it produces
+        // the same first input.
+        let tx1 = TxBuilder::new(2322u64)
+            .coin_input(AssetId::default(), 100)
+            .change_output(AssetId::default())
+            .build()
+            .transaction()
+            .clone();
+
+        let tx2 = TxBuilder::new(2322u64)
+            // The same input as `tx1`
+            .coin_input(AssetId::default(), 100)
+            // Additional unique for `tx2` input
+            .coin_input(AssetId::default(), 100)
+            .change_output(AssetId::default())
+            .build()
+            .transaction()
+            .clone();
+
+        let first_input = tx2.inputs()[0].clone();
+        let mut first_coin = CompressedCoin::default();
+        first_coin.set_owner(*first_input.input_owner().unwrap());
+        first_coin.set_amount(100);
+        let second_input = tx2.inputs()[1].clone();
+        let mut second_coin = CompressedCoin::default();
+        second_coin.set_owner(*second_input.input_owner().unwrap());
+        second_coin.set_amount(100);
+        let db: &mut Database<OnChain, RegularStage<OnChain>> = &mut Database::default();
+        // Insert both inputs
+        db.storage::<Coins>()
+            .insert(&first_input.utxo_id().unwrap().clone(), &first_coin)
+            .unwrap();
+        db.storage::<Coins>()
+            .insert(&second_input.utxo_id().unwrap().clone(), &second_coin)
+            .unwrap();
+
+        let block = PartialFuelBlock {
+            header: Default::default(),
+            transactions: vec![tx1.clone().into(), tx2.clone().into()],
+        };
+
+        // The first input should be `Unspent` before execution.
+        db.storage::<Coins>()
+            .get(first_input.utxo_id().unwrap())
+            .unwrap()
+            .expect("coin should be unspent");
+        // The second input should be `Unspent` before execution.
+        db.storage::<Coins>()
+            .get(second_input.utxo_id().unwrap())
+            .unwrap()
+            .expect("coin should be unspent");
+
+        let consensus_params = ConsensusParameters::default();
+        let coinbase_contract_id = ContractId::default();
+        let tx1 = tx1.as_script().unwrap().clone();
+        let create_tx_checked = tx1
+            .into_checked(*block.header.height(), &consensus_params)
+            .expect("into_checked successful");
+        let mut storage_transaction = db.write_transaction();
+        let execution_data = &mut ExecutionData::new();
+        let exec_result1 = fvm_transact_commit(
+            &mut storage_transaction,
+            create_tx_checked,
+            &block.header,
+            coinbase_contract_id,
+            0,
+            consensus_params.clone(),
+            true,
+            execution_data,
+        );
+        assert_eq!(true, exec_result1.is_ok());
+        let exec_result1 = exec_result1.unwrap();
+        db.commit_changes(exec_result1.4).unwrap();
+
+        let tx2 = tx2.as_script().unwrap().clone();
+        let create_tx_checked = tx2
+            .into_checked(*block.header.height(), &consensus_params)
+            .expect("into_checked successful");
+        let mut storage_transaction = db.write_transaction();
+        let execution_data = &mut ExecutionData::new();
+        let exec_result1 = fvm_transact_commit(
+            &mut storage_transaction,
+            create_tx_checked,
+            &block.header,
+            coinbase_contract_id,
+            0,
+            consensus_params.clone(),
+            true,
+            execution_data,
+        );
+        assert_eq!(true, exec_result1.is_err());
+
+        // The first input should be spent by `tx1` after execution.
+        let coin = db
+            .storage::<Coins>()
+            .get(first_input.utxo_id().unwrap())
+            .unwrap();
+        // verify coin is pruned from utxo set
+        assert!(coin.is_none());
+        // The second input should be `Unspent` after execution.
+        db.storage::<Coins>()
+            .get(second_input.utxo_id().unwrap())
+            .unwrap()
+            .expect("coin should be unspent");
+    }
+
+    #[test]
     fn coin_input_fails_when_mismatches_database() {
         const AMOUNT: u64 = 100;
 
