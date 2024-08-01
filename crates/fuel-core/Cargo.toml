@@ -79,8 +79,6 @@ mockall = { workspace = true }
 proptest = { workspace = true }
 test-case = { workspace = true }
 test-strategy = { workspace = true }
-fluentbase-core = { path = "../../../fluentbase/crates/core" }
-
 
 [features]
 default = ["rocksdb"]

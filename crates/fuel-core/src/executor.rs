@@ -1,164 +1,69 @@
-#[allow(clippy::arithmetic_side_effects)]
-#[allow(clippy::cast_possible_truncation)]
-#[allow(non_snake_case)]
-#[cfg(test)]
-mod tests {
-    use crate as fuel_core;
-    use crate::database::{
-        database_description::on_chain::OnChain,
-        RegularStage,
+#[cfg(feature = "test-helpers")]
+pub mod test_helpers {
+    use rand::{
+        prelude::StdRng,
+        Rng,
     };
-    use fluentbase_core::helpers_fvm::{
-        fvm_transact,
-        fvm_transact_commit,
-    };
-    use fuel_core::database::Database;
-    use fuel_core_executor::{
-        executor::{
-            ExecutionData,
-            OnceTransactionsSource,
-        },
-        ports::{
-            MaybeCheckedTransaction,
-            RelayerPort,
-        },
-        refs::ContractRef,
-    };
+
+    use fuel_core_executor::ports::RelayerPort;
     use fuel_core_storage::{
-        tables::{
-            Coins,
-            ConsensusParametersVersions,
-            ContractsRawCode,
-            Messages,
-        },
+        tables::ConsensusParametersVersions,
         transactional::{
             AtomicView,
-            Modifiable,
             WriteTransaction,
         },
         Result as StorageResult,
         StorageAsMut,
-        StorageAsRef,
     };
+    use fuel_core_txpool::types::ContractId;
     use fuel_core_types::{
-        blockchain::{
-            block::{
-                Block,
-                PartialFuelBlock,
-            },
-            header::{
-                ApplicationHeader,
-                ConsensusHeader,
-                PartialBlockHeader,
-            },
-            primitives::DaBlockHeight,
-        },
+        blockchain::primitives::DaBlockHeight,
         entities::{
-            coins::coin::CompressedCoin,
-            relayer::message::{
-                Message,
-                MessageV1,
-            },
+            relayer::message::MessageV1,
+            Message,
         },
         fuel_asm::{
             op,
-            GTFArgs,
             RegId,
         },
-        fuel_crypto::SecretKey,
-        fuel_merkle::sparse,
+        fuel_crypto::{
+            coins_bip32::ecdsa::signature::rand_core::SeedableRng,
+            SecretKey,
+        },
         fuel_tx::{
-            consensus_parameters::gas::GasCostsValuesV1,
-            field::{
-                InputContract,
-                Inputs,
-                MintAmount,
-                MintAssetId,
-                OutputContract,
-                Outputs,
-                Policies,
-                Script as ScriptField,
-                TxPointer as TxPointerTraitTrait,
-            },
-            input::{
-                coin::{
-                    CoinPredicate,
-                    CoinSigned,
-                },
-                contract,
-                Input,
-            },
-            policies::PolicyType,
-            Bytes32,
-            Cacheable,
+            field::Inputs,
+            Address,
+            AssetId,
             ConsensusParameters,
+            Contract,
             Create,
-            DependentCost,
-            FeeParameters,
             Finalizable,
-            GasCostsValues,
+            Input,
             Output,
-            Receipt,
+            Salt,
             Script,
             Transaction,
             TransactionBuilder,
-            TransactionFee,
             TxParameters,
-            TxPointer,
-            UniqueIdentifier,
-            UtxoId,
-            ValidityError,
         },
         fuel_types::{
             canonical::Serialize,
-            Address,
-            AssetId,
-            BlockHeight,
-            ChainId,
-            ContractId,
-            Salt,
             Word,
         },
         fuel_vm::{
-            checked_transaction::{
-                CheckError,
-                EstimatePredicates,
-                IntoChecked,
-            },
-            interpreter::{
-                ExecutableTransaction,
-                MemoryInstance,
-            },
             script_with_data_offset,
-            util::test_helpers::TestBuilder as TxBuilder,
+            util::test_helpers::TestBuilder,
             Call,
             CallFrame,
-            Contract,
-            ProgramState,
         },
-        services::{
-            block_producer::Components,
-            executor::{
-                Error as ExecutorError,
-                Event as ExecutorEvent,
-                ExecutionResult,
-                TransactionExecutionResult,
-                TransactionValidityError,
-            },
-            relayer::Event,
-        },
-        tai64::Tai64,
+        services::relayer::Event,
     };
     use fuel_core_upgradable_executor::executor::Executor;
-    use itertools::Itertools;
-    use rand::{
-        prelude::StdRng,
-        Rng,
-        SeedableRng,
-    };
+
+    use crate::database::Database;
 
     #[derive(Clone, Debug, Default)]
-    struct Config {
+    pub struct Config {
         /// Network-wide common parameters used for validating the chain.
         /// The executor already has these parameters, and this field allows us
         /// to override the existing value.
@@ -170,7 +75,7 @@ mod tests {
     }
 
     #[derive(Clone, Debug)]
-    struct DisabledRelayer;
+    pub struct DisabledRelayer;
 
     impl RelayerPort for DisabledRelayer {
         fn enabled(&self) -> bool {
@@ -190,7 +95,7 @@ mod tests {
         }
     }
 
-    fn add_consensus_parameters(
+    pub fn add_consensus_parameters(
         mut database: Database,
         consensus_parameters: &ConsensusParameters,
     ) -> Database {
@@ -203,7 +108,25 @@ mod tests {
         database
     }
 
-    fn create_executor(
+    pub fn create_contract<R: Rng>(
+        contract_code: Vec<u8>,
+        rng: &mut R,
+    ) -> (Create, ContractId) {
+        let salt: Salt = rng.gen();
+        let contract = Contract::from(contract_code.clone());
+        let root = contract.root();
+        let state_root = Contract::default_state_root();
+        let contract_id = contract.id(&salt, &root, &state_root);
+
+        let tx =
+            TransactionBuilder::create(contract_code.into(), salt, Default::default())
+                .add_random_fee_input()
+                .add_output(Output::contract_created(contract_id, state_root))
+                .finalize();
+        (tx, contract_id)
+    }
+
+    pub fn create_executor(
         database: Database,
         config: Config,
     ) -> Executor<Database, DisabledRelayer> {
@@ -218,7 +141,42 @@ mod tests {
         Executor::new(database, DisabledRelayer, executor_config)
     }
 
-    pub(crate) fn setup_executable_script() -> (Create, Script) {
+    pub fn message_from_input(input: &Input, da_height: u64) -> Message {
+        MessageV1 {
+            sender: *input.sender().unwrap(),
+            recipient: *input.recipient().unwrap(),
+            nonce: *input.nonce().unwrap(),
+            amount: input.amount().unwrap(),
+            data: input
+                .input_data()
+                .map(|data| data.to_vec())
+                .unwrap_or_default(),
+            da_height: DaBlockHeight(da_height),
+        }
+        .into()
+    }
+
+    /// Helper to build transactions and a message in it for some of the message tests
+    pub fn make_tx_and_message(
+        rng: &mut StdRng,
+        da_height: u64,
+    ) -> (Transaction, Message) {
+        let tx = TransactionBuilder::script(vec![], vec![])
+            .add_unsigned_message_input(
+                SecretKey::random(rng),
+                rng.gen(),
+                rng.gen(),
+                1000,
+                vec![],
+            )
+            .add_output(Output::change(rng.gen(), 1000, AssetId::BASE))
+            .finalize();
+
+        let message = message_from_input(&tx.inputs()[0], da_height);
+        (tx.into(), message)
+    }
+
+    pub fn setup_executable_script() -> (Create, Script) {
         let mut rng = StdRng::seed_from_u64(2322);
         let asset_id: AssetId = rng.gen();
         let owner: Address = rng.gen();
@@ -277,7 +235,7 @@ mod tests {
         .copied()
         .collect();
 
-        let script = TxBuilder::new(2322)
+        let script = TestBuilder::new(2322)
             .script_gas_limit(TxParameters::DEFAULT.max_gas_per_tx() >> 1)
             .start_script(script, script_data)
             .contract_input(contract_id)
@@ -292,6 +250,149 @@ mod tests {
 
         (create, script)
     }
+}
+
+#[allow(clippy::arithmetic_side_effects)]
+#[allow(clippy::cast_possible_truncation)]
+#[allow(non_snake_case)]
+#[cfg(test)]
+mod tests {
+    use itertools::Itertools;
+    use rand::{
+        prelude::StdRng,
+        Rng,
+        SeedableRng,
+    };
+
+    use fuel_core::database::Database;
+    use fuel_core_executor::{
+        executor::OnceTransactionsSource,
+        ports::MaybeCheckedTransaction,
+        refs::ContractRef,
+    };
+    use fuel_core_storage::{
+        tables::{
+            Coins,
+            ContractsRawCode,
+            Messages,
+        },
+        transactional::AtomicView,
+        StorageAsMut,
+        StorageAsRef,
+    };
+    use fuel_core_types::{
+        blockchain::{
+            block::{
+                Block,
+                PartialFuelBlock,
+            },
+            header::{
+                ApplicationHeader,
+                ConsensusHeader,
+                PartialBlockHeader,
+            },
+            primitives::DaBlockHeight,
+        },
+        entities::{
+            coins::coin::CompressedCoin,
+            relayer::message::Message,
+        },
+        fuel_asm::{
+            op,
+            GTFArgs,
+            RegId,
+        },
+        fuel_crypto::SecretKey,
+        fuel_merkle::sparse,
+        fuel_tx::{
+            consensus_parameters::gas::GasCostsValuesV1,
+            field::{
+                InputContract,
+                Inputs,
+                MintAmount,
+                MintAssetId,
+                OutputContract,
+                Outputs,
+                Policies,
+                Script as ScriptField,
+                TxPointer as TxPointerTraitTrait,
+            },
+            input::{
+                coin::{
+                    CoinPredicate,
+                    CoinSigned,
+                },
+                contract,
+                Input,
+            },
+            policies::PolicyType,
+            Bytes32,
+            Cacheable,
+            ConsensusParameters,
+            DependentCost,
+            FeeParameters,
+            Finalizable,
+            GasCostsValues,
+            Output,
+            Receipt,
+            Script,
+            Transaction,
+            TransactionBuilder,
+            TransactionFee,
+            TxParameters,
+            TxPointer,
+            UniqueIdentifier,
+            UtxoId,
+            ValidityError,
+        },
+        fuel_types::{
+            canonical::Serialize,
+            Address,
+            AssetId,
+            BlockHeight,
+            ChainId,
+            ContractId,
+            Word,
+        },
+        fuel_vm::{
+            checked_transaction::{
+                CheckError,
+                EstimatePredicates,
+                IntoChecked,
+            },
+            interpreter::{
+                ExecutableTransaction,
+                MemoryInstance,
+            },
+            script_with_data_offset,
+            util::test_helpers::TestBuilder as TxBuilder,
+            Call,
+            Contract,
+        },
+        services::{
+            block_producer::Components,
+            executor::{
+                Error as ExecutorError,
+                Event as ExecutorEvent,
+                ExecutionResult,
+                TransactionExecutionResult,
+                TransactionValidityError,
+            },
+        },
+        tai64::Tai64,
+    };
+    use fuel_core_upgradable_executor::executor::Executor;
+
+    use crate as fuel_core;
+    use crate::executor::test_helpers::{
+        create_contract,
+        create_executor,
+        make_tx_and_message,
+        message_from_input,
+        setup_executable_script,
+        Config,
+        DisabledRelayer,
+    };
 
     pub(crate) fn test_block(
         block_height: BlockHeight,
@@ -318,24 +419,6 @@ mod tests {
             .transaction()
             .to_owned()
             .into()
-    }
-
-    pub(crate) fn create_contract<R: Rng>(
-        contract_code: Vec<u8>,
-        rng: &mut R,
-    ) -> (Create, ContractId) {
-        let salt: Salt = rng.gen();
-        let contract = Contract::from(contract_code.clone());
-        let root = contract.root();
-        let state_root = Contract::default_state_root();
-        let contract_id = contract.id(&salt, &root, &state_root);
-
-        let tx =
-            TransactionBuilder::create(contract_code.into(), salt, Default::default())
-                .add_random_fee_input()
-                .add_output(Output::contract_created(contract_id, state_root))
-                .finalize();
-        (tx, contract_id)
     }
 
     // Happy path test case that a produced block will also validate
@@ -397,9 +480,6 @@ mod tests {
     }
 
     mod coinbase {
-        use crate::graphql_api::ports::DatabaseContracts;
-
-        use super::*;
         use fuel_core_storage::{
             iter::IterDirection,
             transactional::{
@@ -408,6 +488,13 @@ mod tests {
             },
         };
         use fuel_core_types::services::graphql_api::ContractBalance;
+
+        use crate::{
+            executor::test_helpers::Config,
+            graphql_api::ports::DatabaseContracts,
+        };
+
+        use super::*;
 
         #[test]
         fn executor_commits_transactions_with_non_zero_coinbase_generation() {
@@ -1350,117 +1437,6 @@ mod tests {
     }
 
     #[test]
-    fn skipped_tx_not_changed_spent_status_fluent() {
-        // `tx2` has two inputs: one used by `tx1` and on random. So after the execution of `tx1`,
-        // the `tx2` become invalid and should be skipped by the block producers. Skipped
-        // transactions should not affect the state so the second input should be `Unspent`.
-        // # Dev-note: `TxBuilder::new(2322u64)` is used to create transactions, it produces
-        // the same first input.
-        let tx1 = TxBuilder::new(2322u64)
-            .coin_input(AssetId::default(), 100)
-            .change_output(AssetId::default())
-            .build()
-            .transaction()
-            .clone();
-
-        let tx2 = TxBuilder::new(2322u64)
-            // The same input as `tx1`
-            .coin_input(AssetId::default(), 100)
-            // Additional unique for `tx2` input
-            .coin_input(AssetId::default(), 100)
-            .change_output(AssetId::default())
-            .build()
-            .transaction()
-            .clone();
-
-        let first_input = tx2.inputs()[0].clone();
-        let mut first_coin = CompressedCoin::default();
-        first_coin.set_owner(*first_input.input_owner().unwrap());
-        first_coin.set_amount(100);
-        let second_input = tx2.inputs()[1].clone();
-        let mut second_coin = CompressedCoin::default();
-        second_coin.set_owner(*second_input.input_owner().unwrap());
-        second_coin.set_amount(100);
-        let db: &mut Database<OnChain, RegularStage<OnChain>> = &mut Database::default();
-        // Insert both inputs
-        db.storage::<Coins>()
-            .insert(&first_input.utxo_id().unwrap().clone(), &first_coin)
-            .unwrap();
-        db.storage::<Coins>()
-            .insert(&second_input.utxo_id().unwrap().clone(), &second_coin)
-            .unwrap();
-
-        let block = PartialFuelBlock {
-            header: Default::default(),
-            transactions: vec![tx1.clone().into(), tx2.clone().into()],
-        };
-
-        // The first input should be `Unspent` before execution.
-        db.storage::<Coins>()
-            .get(first_input.utxo_id().unwrap())
-            .unwrap()
-            .expect("coin should be unspent");
-        // The second input should be `Unspent` before execution.
-        db.storage::<Coins>()
-            .get(second_input.utxo_id().unwrap())
-            .unwrap()
-            .expect("coin should be unspent");
-
-        let consensus_params = ConsensusParameters::default();
-        let coinbase_contract_id = ContractId::default();
-        let tx1 = tx1.as_script().unwrap().clone();
-        let create_tx_checked = tx1
-            .into_checked(*block.header.height(), &consensus_params)
-            .expect("into_checked successful");
-        let mut storage_transaction = db.write_transaction();
-        let execution_data = &mut ExecutionData::new();
-        let exec_result1 = fvm_transact_commit(
-            &mut storage_transaction,
-            create_tx_checked,
-            &block.header,
-            coinbase_contract_id,
-            0,
-            consensus_params.clone(),
-            true,
-            execution_data,
-        );
-        assert_eq!(true, exec_result1.is_ok());
-        let exec_result1 = exec_result1.unwrap();
-        db.commit_changes(exec_result1.4).unwrap();
-
-        let tx2 = tx2.as_script().unwrap().clone();
-        let create_tx_checked = tx2
-            .into_checked(*block.header.height(), &consensus_params)
-            .expect("into_checked successful");
-        let mut storage_transaction = db.write_transaction();
-        let execution_data = &mut ExecutionData::new();
-        let exec_result1 = fvm_transact_commit(
-            &mut storage_transaction,
-            create_tx_checked,
-            &block.header,
-            coinbase_contract_id,
-            0,
-            consensus_params.clone(),
-            true,
-            execution_data,
-        );
-        assert_eq!(true, exec_result1.is_err());
-
-        // The first input should be spent by `tx1` after execution.
-        let coin = db
-            .storage::<Coins>()
-            .get(first_input.utxo_id().unwrap())
-            .unwrap();
-        // verify coin is pruned from utxo set
-        assert!(coin.is_none());
-        // The second input should be `Unspent` after execution.
-        db.storage::<Coins>()
-            .get(second_input.utxo_id().unwrap())
-            .unwrap()
-            .expect("coin should be unspent");
-    }
-
-    #[test]
     fn coin_input_fails_when_mismatches_database() {
         const AMOUNT: u64 = 100;
 
@@ -1493,36 +1469,6 @@ mod tests {
             header: Default::default(),
             transactions: vec![tx.clone().into()],
         };
-
-        {
-            // fluent tests
-            let consensus_params = ConsensusParameters::default();
-            let coinbase_contract_id = ContractId::default();
-            let checked_tx = tx
-                .into_checked(*block.header.height(), &consensus_params)
-                .expect("into_checked successful");
-            let mut memory = MemoryInstance::new();
-            let execution_data = &mut ExecutionData::new();
-            let mut storage_transaction = db.write_transaction();
-            let fvm_exec_result = fvm_transact(
-                &mut storage_transaction,
-                checked_tx,
-                &block.header,
-                coinbase_contract_id,
-                0,
-                &mut memory,
-                consensus_params,
-                true,
-                execution_data,
-            );
-            assert_eq!(true, fvm_exec_result.is_err());
-            assert!(matches!(
-                &fvm_exec_result.unwrap_err(),
-                &ExecutorError::TransactionValidity(
-                    TransactionValidityError::CoinMismatch(_)
-                )
-            ));
-        }
 
         let ExecutionResult {
             block: _block,
@@ -1574,36 +1520,6 @@ mod tests {
             header: Default::default(),
             transactions: vec![tx.clone().into()],
         };
-
-        {
-            // fluent tests
-            let consensus_params = ConsensusParameters::default();
-            let coinbase_contract_id = ContractId::default();
-            let checked_tx = tx
-                .into_checked(*block.header.height(), &consensus_params)
-                .expect("into_checked successful");
-            let mut memory = MemoryInstance::new();
-            let execution_data = &mut ExecutionData::new();
-            let mut storage_transaction = db.write_transaction();
-            let fvm_exec_result = fvm_transact(
-                &mut storage_transaction,
-                checked_tx,
-                &block.header,
-                coinbase_contract_id,
-                0,
-                &mut memory,
-                consensus_params,
-                true,
-                execution_data,
-            );
-            assert_eq!(true, fvm_exec_result.is_err());
-            assert!(matches!(
-                &fvm_exec_result.unwrap_err(),
-                &ExecutorError::TransactionValidity(
-                    TransactionValidityError::ContractDoesNotExist(_)
-                )
-            ));
-        }
 
         let ExecutionResult {
             skipped_transactions,
@@ -1745,53 +1661,6 @@ mod tests {
             transactions: vec![create.clone().into(), non_modify_state_tx.clone()],
         };
 
-        {
-            // fluent tests
-            let consensus_params = ConsensusParameters::default();
-            let coinbase_contract_id = ContractId::default();
-            let create_tx = create.as_create().unwrap().clone();
-            let create_tx_checked = create_tx
-                .into_checked(*block.header.height(), &consensus_params)
-                .expect("into_checked successful");
-            let mut storage_transaction = db.write_transaction();
-            let execution_data = &mut ExecutionData::new();
-            let fvm_exec_result = fvm_transact_commit(
-                &mut storage_transaction,
-                create_tx_checked,
-                &block.header,
-                coinbase_contract_id,
-                0,
-                consensus_params.clone(),
-                false,
-                execution_data,
-            );
-            assert_eq!(true, fvm_exec_result.is_ok());
-
-            let script_non_modify_state_tx =
-                non_modify_state_tx.as_script().unwrap().clone();
-            let script_non_modify_state_tx_checked = script_non_modify_state_tx
-                .into_checked(*block.header.height(), &consensus_params)
-                .expect("into_checked successful");
-            let fvm_exec_result = fvm_transact_commit(
-                &mut storage_transaction,
-                script_non_modify_state_tx_checked,
-                &block.header,
-                coinbase_contract_id,
-                0,
-                consensus_params,
-                false,
-                execution_data,
-            );
-            assert_eq!(true, fvm_exec_result.is_ok());
-            let fvm_exec_result = fvm_exec_result.unwrap();
-            let empty_state = (*sparse::empty_sum()).into();
-            let executed_tx = fvm_exec_result.2;
-            assert_eq!(executed_tx.inputs()[0].state_root(), Some(&empty_state));
-            assert_eq!(executed_tx.inputs()[0].balance_root(), Some(&empty_state));
-            assert_eq!(executed_tx.outputs()[0].state_root(), Some(&empty_state));
-            assert_eq!(executed_tx.outputs()[0].balance_root(), Some(&empty_state));
-        }
-
         let ExecutionResult {
             block, tx_status, ..
         } = executor.produce_and_commit(block).unwrap();
@@ -1846,61 +1715,6 @@ mod tests {
             },
             transactions: vec![create.clone().into(), non_modify_state_tx.clone()],
         };
-
-        {
-            // fluent tests
-            let consensus_params = ConsensusParameters::default();
-            let coinbase_contract_id = ContractId::default();
-            let create_tx = create.as_create().unwrap().clone();
-            let create_tx_checked = create_tx
-                .into_checked(*block.header.height(), &consensus_params)
-                .expect("into_checked successful");
-            let mut storage_transaction = db.write_transaction();
-            let execution_data = &mut ExecutionData::new();
-            let fvm_exec_result = fvm_transact_commit(
-                &mut storage_transaction,
-                create_tx_checked,
-                &block.header,
-                coinbase_contract_id,
-                0,
-                consensus_params.clone(),
-                false,
-                execution_data,
-            );
-            assert_eq!(true, fvm_exec_result.is_ok());
-            // let fvm_exec_result = fvm_exec_result.unwrap();
-
-            let script_non_modify_state_tx =
-                non_modify_state_tx.as_script().unwrap().clone();
-            let script_non_modify_state_tx_checked = script_non_modify_state_tx
-                .into_checked(*block.header.height(), &consensus_params)
-                .expect("into_checked successful");
-            let fvm_exec_result = fvm_transact_commit(
-                &mut storage_transaction,
-                script_non_modify_state_tx_checked,
-                &block.header,
-                coinbase_contract_id,
-                0,
-                consensus_params,
-                false,
-                execution_data,
-            );
-            assert_eq!(true, fvm_exec_result.is_ok());
-            let fvm_exec_result = fvm_exec_result.unwrap();
-            let empty_state = (*sparse::empty_sum()).into();
-            let executed_tx = fvm_exec_result.2;
-            assert!(matches!(fvm_exec_result.1, ProgramState::Revert { .. }));
-            assert_eq!(
-                executed_tx.inputs()[0].state_root(),
-                executed_tx.outputs()[0].state_root()
-            );
-            assert_eq!(
-                executed_tx.inputs()[0].balance_root(),
-                executed_tx.outputs()[0].balance_root()
-            );
-            assert_eq!(executed_tx.inputs()[0].state_root(), Some(&empty_state));
-            assert_eq!(executed_tx.inputs()[0].balance_root(), Some(&empty_state));
-        }
 
         let ExecutionResult {
             block, tx_status, ..
@@ -1982,7 +1796,7 @@ mod tests {
             .build()
             .transaction()
             .clone();
-        let mut db = Database::default();
+        let db = Database::default();
 
         let mut executor = create_executor(
             db.clone(),
@@ -2005,62 +1819,6 @@ mod tests {
                 modify_balance_and_state_tx.clone().into(),
             ],
         };
-
-        {
-            // fluent tests
-            let consensus_params = ConsensusParameters::default();
-            let coinbase_contract_id = ContractId::default();
-            let create_tx = create.as_create().unwrap().clone();
-            let create_tx_checked = create_tx
-                .into_checked(*block.header.height(), &consensus_params)
-                .expect("into_checked successful");
-            let mut storage_transaction = db.write_transaction();
-            let execution_data = &mut ExecutionData::new();
-            let fvm_exec_result = fvm_transact_commit(
-                &mut storage_transaction,
-                create_tx_checked,
-                &block.header,
-                coinbase_contract_id,
-                0,
-                consensus_params.clone(),
-                false,
-                execution_data,
-            );
-            assert_eq!(true, fvm_exec_result.is_ok());
-
-            let script_modify_balance_and_state_tx =
-                modify_balance_and_state_tx.as_script().unwrap().clone();
-            let script_modify_balance_and_state_tx_checked =
-                script_modify_balance_and_state_tx
-                    .into_checked(*block.header.height(), &consensus_params)
-                    .expect("into_checked successful");
-            let fvm_exec_result = fvm_transact_commit(
-                &mut storage_transaction,
-                script_modify_balance_and_state_tx_checked,
-                &block.header,
-                coinbase_contract_id,
-                0,
-                consensus_params,
-                false,
-                execution_data,
-            );
-            assert_eq!(true, fvm_exec_result.is_ok());
-            let fvm_exec_result = fvm_exec_result.unwrap();
-
-            let empty_state = (*sparse::empty_sum()).into();
-            let executed_tx = fvm_exec_result.2;
-            assert_eq!(executed_tx.inputs()[0].state_root(), Some(&empty_state));
-            assert_eq!(executed_tx.inputs()[0].balance_root(), Some(&empty_state));
-            // Roots should be different
-            assert_ne!(
-                executed_tx.inputs()[0].state_root(),
-                executed_tx.outputs()[0].state_root()
-            );
-            assert_ne!(
-                executed_tx.inputs()[0].balance_root(),
-                executed_tx.outputs()[0].balance_root()
-            );
-        }
 
         let ExecutionResult {
             block, tx_status, ..
@@ -2145,7 +1903,7 @@ mod tests {
             .build()
             .transaction()
             .clone();
-        let mut db = Database::default();
+        let db = Database::default();
 
         let consensus_parameters = ConsensusParameters::default();
         let mut executor = create_executor(
@@ -2171,45 +1929,6 @@ mod tests {
             ],
         };
 
-        {
-            // fluent tests
-            let consensus_params = ConsensusParameters::default();
-            let coinbase_contract_id = ContractId::default();
-            let tx1 = create.as_create().unwrap().clone();
-            let create_tx_checked = tx1
-                .into_checked(*block.header.height(), &consensus_params)
-                .expect("into_checked successful");
-            let mut storage_transaction = db.write_transaction();
-            let execution_data = &mut ExecutionData::new();
-            let exec_result1 = fvm_transact_commit(
-                &mut storage_transaction,
-                create_tx_checked,
-                &block.header,
-                coinbase_contract_id,
-                0,
-                consensus_params.clone(),
-                false,
-                execution_data,
-            );
-            assert_eq!(true, exec_result1.is_ok());
-
-            let tx2 = modify_balance_and_state_tx.as_script().unwrap().clone();
-            let tx2_checked = tx2
-                .into_checked(*block.header.height(), &consensus_params)
-                .expect("into_checked successful");
-            let exec_result2 = fvm_transact_commit(
-                &mut storage_transaction,
-                tx2_checked,
-                &block.header,
-                coinbase_contract_id,
-                0,
-                consensus_params.clone(),
-                false,
-                execution_data,
-            );
-            assert_eq!(true, exec_result2.is_ok());
-        }
-
         let ExecutionResult { block, .. } = executor.produce_and_commit(block).unwrap();
 
         let executed_tx = block.transactions()[1].as_script().unwrap();
@@ -2230,34 +1949,6 @@ mod tests {
             },
             transactions: vec![new_tx.clone().into()],
         };
-
-        {
-            // fluent tests
-            let consensus_params = ConsensusParameters::default();
-            let coinbase_contract_id = ContractId::default();
-            let tx1 = new_tx.as_script().unwrap().clone();
-            let create_tx_checked = tx1
-                .into_checked_basic(*block.header.height(), &consensus_params)
-                .expect("into_checked successful");
-            let mut storage_transaction = db.write_transaction();
-            let execution_data = &mut ExecutionData::new();
-            let exec_result1 = fvm_transact_commit(
-                &mut storage_transaction,
-                create_tx_checked,
-                &block.header,
-                coinbase_contract_id,
-                0,
-                consensus_params.clone(),
-                false,
-                execution_data,
-            );
-            assert_eq!(true, exec_result1.is_ok());
-            let exec_result1 = exec_result1.unwrap();
-
-            let tx = exec_result1.2;
-            assert_eq!(tx.inputs()[0].balance_root(), balance_root);
-            assert_eq!(tx.inputs()[0].state_root(), state_root);
-        }
 
         let ExecutionResult {
             block, tx_status, ..
@@ -2325,52 +2016,6 @@ mod tests {
             },
             transactions: vec![create.clone().into(), foreign_transfer.clone().into()],
         };
-
-        {
-            // fluent tests
-            let consensus_params = ConsensusParameters::default();
-            let coinbase_contract_id = ContractId::default();
-            let tx1 = create.as_create().unwrap().clone();
-            let create_tx_checked = tx1
-                .into_checked(*block.header.height(), &consensus_params)
-                .expect("into_checked successful");
-            let mut storage_transaction = db.write_transaction();
-            let execution_data = &mut ExecutionData::new();
-            let exec_result1 = fvm_transact_commit(
-                &mut storage_transaction,
-                create_tx_checked,
-                &block.header,
-                coinbase_contract_id,
-                0,
-                consensus_params.clone(),
-                false,
-                execution_data,
-            );
-            assert_eq!(true, exec_result1.is_ok());
-
-            let tx2 = foreign_transfer.as_script().unwrap().clone();
-            let tx2_checked = tx2
-                .into_checked_basic(*block.header.height(), &consensus_params)
-                .expect("into_checked successful");
-            let exec_result2 = fvm_transact_commit(
-                &mut storage_transaction,
-                tx2_checked,
-                &block.header,
-                coinbase_contract_id,
-                0,
-                consensus_params.clone(),
-                false,
-                execution_data,
-            );
-            assert_eq!(true, exec_result2.is_ok());
-            let exec_result2 = exec_result2.unwrap();
-
-            db.commit_changes(exec_result2.4).unwrap();
-            let contract_ref = ContractRef::new(db.clone(), contract_id);
-            // Assert the balance root should not be affected.
-            let empty_state = (*sparse::empty_sum()).into();
-            assert_eq!(contract_ref.balance_root().unwrap(), empty_state);
-        }
 
         let _ = executor.produce_and_commit(block).unwrap();
 
@@ -2636,74 +2281,6 @@ mod tests {
     }
 
     #[test]
-    fn outputs_with_amount_are_included_utxo_set_fluent() {
-        let (deploy, script) = setup_executable_script();
-        let script_id = script.id(&ChainId::default());
-
-        let db: &mut Database<OnChain, RegularStage<OnChain>> = &mut Database::default();
-
-        let block = PartialFuelBlock {
-            header: Default::default(),
-            transactions: vec![deploy.clone().into(), script.clone().into()],
-        };
-
-        // fluent tests
-        let consensus_params = ConsensusParameters::default();
-        let coinbase_contract_id = ContractId::default();
-        let tx1 = deploy.as_create().unwrap().clone();
-        let create_tx_checked = tx1
-            .into_checked(*block.header.height(), &consensus_params)
-            .expect("into_checked successful");
-        let mut storage_transaction = db.write_transaction();
-        let execution_data = &mut ExecutionData::new();
-        let exec_result1 = fvm_transact_commit(
-            &mut storage_transaction,
-            create_tx_checked,
-            &block.header,
-            coinbase_contract_id,
-            0,
-            consensus_params.clone(),
-            false,
-            execution_data,
-        );
-        assert_eq!(true, exec_result1.is_ok());
-        let exec_result1 = exec_result1.unwrap();
-        db.commit_changes(exec_result1.4).unwrap();
-
-        let tx2 = script.as_script().unwrap().clone();
-        let tx2_checked = tx2
-            .into_checked_basic(*block.header.height(), &consensus_params)
-            .expect("into_checked successful");
-        let mut storage_transaction = db.write_transaction();
-        let exec_result2 = fvm_transact_commit(
-            &mut storage_transaction,
-            tx2_checked,
-            &block.header,
-            coinbase_contract_id,
-            0,
-            consensus_params.clone(),
-            false,
-            execution_data,
-        );
-        assert_eq!(true, exec_result2.is_ok());
-        let exec_result2 = exec_result2.unwrap();
-        db.commit_changes(exec_result2.4).unwrap();
-
-        for (idx, output) in exec_result2.2.outputs().iter().enumerate() {
-            let id = UtxoId::new(script_id, idx as u16);
-            match output {
-                Output::Change { .. } | Output::Variable { .. } | Output::Coin { .. } => {
-                    let maybe_utxo = db.storage::<Coins>().get(&id).unwrap();
-                    assert!(maybe_utxo.is_some());
-                    let utxo = maybe_utxo.unwrap();
-                    assert!(*utxo.amount() > 0)
-                }
-                _ => (),
-            }
-        }
-    }
-
-    #[test]
     fn outputs_with_no_value_are_excluded_from_utxo_set() {
         let mut rng = StdRng::seed_from_u64(2322);
         let asset_id: AssetId = rng.gen();
@@ -2736,92 +2313,6 @@ mod tests {
             let maybe_utxo = database.storage::<Coins>().get(&id).unwrap();
             assert!(maybe_utxo.is_none());
         }
-    }
-
-    #[test]
-    fn outputs_with_no_value_are_excluded_from_utxo_set_fluent() {
-        let mut rng = StdRng::seed_from_u64(2322);
-        let asset_id: AssetId = rng.gen();
-        let input_amount = 0;
-        let coin_output_amount = 0;
-
-        let tx: Transaction = TxBuilder::new(2322)
-            .coin_input(asset_id, input_amount)
-            .variable_output(Default::default())
-            .coin_output(asset_id, coin_output_amount)
-            .change_output(asset_id)
-            .build()
-            .transaction()
-            .clone()
-            .into();
-        let tx_id = tx.id(&ChainId::default());
-
-        let block = PartialFuelBlock {
-            header: Default::default(),
-            transactions: vec![tx.clone()],
-        };
-
-        let db: &mut Database<OnChain, RegularStage<OnChain>> = &mut Database::default();
-        // fluent tests
-        let consensus_params = ConsensusParameters::default();
-        let coinbase_contract_id = ContractId::default();
-        let tx1 = tx.as_script().unwrap().clone();
-        let create_tx_checked = tx1
-            .into_checked(*block.header.height(), &consensus_params)
-            .expect("into_checked successful");
-        let mut storage_transaction = db.write_transaction();
-        let execution_data = &mut ExecutionData::new();
-        let exec_result1 = fvm_transact_commit(
-            &mut storage_transaction,
-            create_tx_checked,
-            &block.header,
-            coinbase_contract_id,
-            0,
-            consensus_params.clone(),
-            false,
-            execution_data,
-        );
-        assert_eq!(true, exec_result1.is_ok());
-        let exec_result1 = exec_result1.unwrap();
-        db.commit_changes(exec_result1.4).unwrap();
-
-        for idx in 0..2 {
-            let id = UtxoId::new(tx_id, idx);
-            let maybe_utxo = db.storage::<Coins>().get(&id).unwrap();
-            assert!(maybe_utxo.is_none());
-        }
-    }
-
-    fn message_from_input(input: &Input, da_height: u64) -> Message {
-        MessageV1 {
-            sender: *input.sender().unwrap(),
-            recipient: *input.recipient().unwrap(),
-            nonce: *input.nonce().unwrap(),
-            amount: input.amount().unwrap(),
-            data: input
-                .input_data()
-                .map(|data| data.to_vec())
-                .unwrap_or_default(),
-            da_height: DaBlockHeight(da_height),
-        }
-        .into()
-    }
-
-    /// Helper to build transactions and a message in it for some of the message tests
-    fn make_tx_and_message(rng: &mut StdRng, da_height: u64) -> (Transaction, Message) {
-        let tx = TransactionBuilder::script(vec![], vec![])
-            .add_unsigned_message_input(
-                SecretKey::random(rng),
-                rng.gen(),
-                rng.gen(),
-                1000,
-                vec![],
-            )
-            .add_output(Output::change(rng.gen(), 1000, AssetId::BASE))
-            .finalize();
-
-        let message = message_from_input(&tx.inputs()[0], da_height);
-        (tx.into(), message)
     }
 
     /// Helper to build database and executor for some of the message tests
@@ -2955,73 +2446,6 @@ mod tests {
     }
 
     #[test]
-    fn reverted_execution_consume_only_message_coins_fluent() {
-        let mut rng = StdRng::seed_from_u64(2322);
-        let to: Address = rng.gen();
-        let amount = 500;
-
-        // Script that return `1` - failed script -> execution result will be reverted.
-        let script = vec![op::ret(1)].into_iter().collect();
-        let tx = TransactionBuilder::script(script, vec![])
-            // Add `Input::MessageCoin`
-            .add_unsigned_message_input(SecretKey::random(&mut rng), rng.gen(), rng.gen(), amount, vec![])
-            // Add `Input::MessageData`
-            .add_unsigned_message_input(SecretKey::random(&mut rng), rng.gen(), rng.gen(), amount, vec![0xff; 10])
-            .add_output(Output::change(to, amount + amount, AssetId::BASE))
-            .finalize();
-        let tx_id = tx.id(&ChainId::default());
-
-        let message_coin = message_from_input(&tx.inputs()[0], 0);
-        let message_data = message_from_input(&tx.inputs()[1], 0);
-        let messages = vec![&message_coin, &message_data];
-
-        let block = PartialFuelBlock {
-            header: Default::default(),
-            transactions: vec![tx.clone().into()],
-        };
-
-        // let mut exec = make_executor(&messages);
-
-        let db: &mut Database<OnChain, RegularStage<OnChain>> = &mut Database::default();
-        for message in messages {
-            db.storage::<Messages>()
-                .insert(message.id(), message)
-                .unwrap();
-        }
-
-        let view = db.latest_view().unwrap();
-        assert!(view.message_exists(message_coin.nonce()).unwrap());
-        assert!(view.message_exists(message_data.nonce()).unwrap());
-        let consensus_params = ConsensusParameters::default();
-        let coinbase_contract_id = ContractId::default();
-        let tx1 = tx.as_script().unwrap().clone();
-        let create_tx_checked = tx1
-            .into_checked(*block.header.height(), &consensus_params)
-            .expect("into_checked successful");
-        let mut storage_transaction = db.write_transaction();
-        let execution_data = &mut ExecutionData::new();
-        let exec_result1 = fvm_transact_commit(
-            &mut storage_transaction,
-            create_tx_checked,
-            &block.header,
-            coinbase_contract_id,
-            0,
-            consensus_params.clone(),
-            false,
-            execution_data,
-        );
-        assert_eq!(true, exec_result1.is_ok());
-        let exec_result1 = exec_result1.unwrap();
-        db.commit_changes(exec_result1.4).unwrap();
-
-        // We should spend only `message_coin`. The `message_data` should be unspent.
-        let view = db.latest_view().unwrap();
-        assert!(!view.message_exists(message_coin.nonce()).unwrap());
-        assert!(view.message_exists(message_data.nonce()).unwrap());
-        assert_eq!(*view.coin(&UtxoId::new(tx_id, 0)).unwrap().amount(), amount);
-    }
-
-    #[test]
     fn message_fails_when_spending_nonexistent_message_id() {
         let mut rng = StdRng::seed_from_u64(2322);
 
@@ -3125,53 +2549,6 @@ mod tests {
         let err = &skipped_transactions[0].1;
         assert!(matches!(
             err,
-            &ExecutorError::TransactionValidity(
-                TransactionValidityError::MessageMismatch(_)
-            )
-        ));
-    }
-
-    #[test]
-    fn message_input_fails_when_mismatches_database_fluent() {
-        let mut rng = StdRng::seed_from_u64(2322);
-
-        let (tx, mut message) = make_tx_and_message(&mut rng, 0);
-
-        // Modifying the message to make it mismatch
-        message.set_amount(123);
-
-        let block = PartialFuelBlock {
-            header: Default::default(),
-            transactions: vec![tx.clone()],
-        };
-
-        let db: &mut Database<OnChain, RegularStage<OnChain>> = &mut Database::default();
-        db.storage::<Messages>()
-            .insert(message.id(), &message)
-            .unwrap();
-        let consensus_params = ConsensusParameters::default();
-        let coinbase_contract_id = ContractId::default();
-        let tx1 = tx.as_script().unwrap().clone();
-        let create_tx_checked = tx1
-            .into_checked(*block.header.height(), &consensus_params)
-            .expect("into_checked successful");
-        let mut storage_transaction = db.write_transaction();
-        let execution_data = &mut ExecutionData::new();
-        let exec_result1 = fvm_transact_commit(
-            &mut storage_transaction,
-            create_tx_checked,
-            &block.header,
-            coinbase_contract_id,
-            0,
-            consensus_params.clone(),
-            true,
-            execution_data,
-        );
-        assert_eq!(true, exec_result1.is_err());
-        let exec_result1 = exec_result1.err().unwrap();
-
-        assert!(matches!(
-            &exec_result1,
             &ExecutorError::TransactionValidity(
                 TransactionValidityError::MessageMismatch(_)
             )
@@ -3523,14 +2900,6 @@ mod tests {
 
     #[cfg(feature = "relayer")]
     mod relayer {
-        use super::*;
-        use crate::{
-            database::database_description::{
-                on_chain::OnChain,
-                relayer::Relayer,
-            },
-            state::ChangesIterator,
-        };
         use fuel_core_relayer::storage::EventsHistory;
         use fuel_core_storage::{
             iter::IteratorOverTable,
@@ -3546,6 +2915,17 @@ mod tests {
             },
             services::executor::ForcedTransactionFailure,
         };
+
+        use crate::{
+            database::database_description::{
+                on_chain::OnChain,
+                relayer::Relayer,
+            },
+            executor::test_helpers::add_consensus_parameters,
+            state::ChangesIterator,
+        };
+
+        use super::*;
 
         fn database_with_genesis_block(da_block_height: u64) -> Database<OnChain> {
             let mut db = add_consensus_parameters(
