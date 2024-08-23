@@ -222,6 +222,10 @@ impl ExecutionData {
             event_inbox_root: Default::default(),
         }
     }
+
+    pub fn used_gas(&self) -> u64 {
+        return self.used_gas
+    }
 }
 
 /// Per-block execution options
