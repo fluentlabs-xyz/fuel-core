@@ -201,7 +201,7 @@ pub struct ExecutionData {
     found_mint: bool,
     message_ids: Vec<MessageId>,
     tx_status: Vec<TransactionExecutionStatus>,
-    events: Vec<ExecutorEvent>,
+    pub events: Vec<ExecutorEvent>,
     changes: Changes,
     pub skipped_transactions: Vec<(TxId, ExecutorError)>,
     event_inbox_root: Bytes32,
@@ -224,7 +224,7 @@ impl ExecutionData {
     }
 
     pub fn used_gas(&self) -> u64 {
-        return self.used_gas
+        self.used_gas
     }
 }
 
@@ -975,7 +975,7 @@ where
     }
 
     #[allow(clippy::too_many_arguments)]
-    fn execute_transaction<T>(
+    pub fn execute_transaction<T>(
         &self,
         tx: MaybeCheckedTransaction,
         tx_id: &TxId,
@@ -1064,7 +1064,7 @@ where
         Ok(())
     }
 
-    fn convert_maybe_checked_tx_to_checked_tx(
+    pub fn convert_maybe_checked_tx_to_checked_tx(
         &self,
         tx: MaybeCheckedTransaction,
         header: &PartialBlockHeader,
