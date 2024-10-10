@@ -86,8 +86,8 @@ fuel-gas-price-algorithm = { version = "0.31.0", path = "crates/fuel-gas-price-a
 
 # Fuel dependencies
 #fuel-vm-private = { version = "0.55.0", package = "fuel-vm", default-features = false }
-fuel-vm-private = { path = "../fuel-vm/fuel-vm", package = "fuel-vm", default-features = false }
-#fuel-vm-private = { git = "https://github.com/fluentlabs-xyz/fuel-vm", branch = "feat/fuel-vm", package = "fuel-vm", default-features = false }
+#fuel-vm-private = { path = "../fuel-vm/fuel-vm", package = "fuel-vm", default-features = false }
+fuel-vm-private = { git = "https://github.com/fluentlabs-xyz/fuel-vm", branch = "feat/fuel-vm", package = "fuel-vm", default-features = false }
 
 # Common dependencies
 anyhow = { version = "1.0", default-features = false }
