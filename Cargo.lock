@@ -2773,7 +2773,7 @@ dependencies = [
 [[package]]
 name = "fuel-asm"
 version = "0.55.0"
-source = "git+https://github.com/fluentlabs-xyz/fuel-vm?branch=feat/fuel-vm#432b295f6a0cd360e1f86a7fb55aec0b5008df6a"
+source = "git+https://github.com/fluentlabs-xyz/fuel-vm?branch=feat/fuel-vm#ea47cf55463749d11f3b8e26f6052fa1d1eb64ad"
 dependencies = [
  "bitflags 2.6.0",
  "fuel-types",
@@ -3394,7 +3394,7 @@ dependencies = [
 [[package]]
 name = "fuel-crypto"
 version = "0.55.0"
-source = "git+https://github.com/fluentlabs-xyz/fuel-vm?branch=feat/fuel-vm#432b295f6a0cd360e1f86a7fb55aec0b5008df6a"
+source = "git+https://github.com/fluentlabs-xyz/fuel-vm?branch=feat/fuel-vm#ea47cf55463749d11f3b8e26f6052fa1d1eb64ad"
 dependencies = [
  "coins-bip32",
  "coins-bip39",
@@ -3414,7 +3414,7 @@ dependencies = [
 [[package]]
 name = "fuel-derive"
 version = "0.55.0"
-source = "git+https://github.com/fluentlabs-xyz/fuel-vm?branch=feat/fuel-vm#432b295f6a0cd360e1f86a7fb55aec0b5008df6a"
+source = "git+https://github.com/fluentlabs-xyz/fuel-vm?branch=feat/fuel-vm#ea47cf55463749d11f3b8e26f6052fa1d1eb64ad"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -3434,7 +3434,7 @@ dependencies = [
 [[package]]
 name = "fuel-merkle"
 version = "0.55.0"
-source = "git+https://github.com/fluentlabs-xyz/fuel-vm?branch=feat/fuel-vm#432b295f6a0cd360e1f86a7fb55aec0b5008df6a"
+source = "git+https://github.com/fluentlabs-xyz/fuel-vm?branch=feat/fuel-vm#ea47cf55463749d11f3b8e26f6052fa1d1eb64ad"
 dependencies = [
  "derive_more",
  "digest 0.10.7",
@@ -3448,12 +3448,12 @@ dependencies = [
 [[package]]
 name = "fuel-storage"
 version = "0.55.0"
-source = "git+https://github.com/fluentlabs-xyz/fuel-vm?branch=feat/fuel-vm#432b295f6a0cd360e1f86a7fb55aec0b5008df6a"
+source = "git+https://github.com/fluentlabs-xyz/fuel-vm?branch=feat/fuel-vm#ea47cf55463749d11f3b8e26f6052fa1d1eb64ad"
 
 [[package]]
 name = "fuel-tx"
 version = "0.55.0"
-source = "git+https://github.com/fluentlabs-xyz/fuel-vm?branch=feat/fuel-vm#432b295f6a0cd360e1f86a7fb55aec0b5008df6a"
+source = "git+https://github.com/fluentlabs-xyz/fuel-vm?branch=feat/fuel-vm#ea47cf55463749d11f3b8e26f6052fa1d1eb64ad"
 dependencies = [
  "bitflags 2.6.0",
  "derivative",
@@ -3475,7 +3475,7 @@ dependencies = [
 [[package]]
 name = "fuel-types"
 version = "0.55.0"
-source = "git+https://github.com/fluentlabs-xyz/fuel-vm?branch=feat/fuel-vm#432b295f6a0cd360e1f86a7fb55aec0b5008df6a"
+source = "git+https://github.com/fluentlabs-xyz/fuel-vm?branch=feat/fuel-vm#ea47cf55463749d11f3b8e26f6052fa1d1eb64ad"
 dependencies = [
  "fuel-derive",
  "hex",
@@ -3486,7 +3486,7 @@ dependencies = [
 [[package]]
 name = "fuel-vm"
 version = "0.55.0"
-source = "git+https://github.com/fluentlabs-xyz/fuel-vm?branch=feat/fuel-vm#432b295f6a0cd360e1f86a7fb55aec0b5008df6a"
+source = "git+https://github.com/fluentlabs-xyz/fuel-vm?branch=feat/fuel-vm#ea47cf55463749d11f3b8e26f6052fa1d1eb64ad"
 dependencies = [
  "anyhow",
  "async-trait",
